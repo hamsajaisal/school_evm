@@ -47,7 +47,6 @@ class _SetupViewState extends State<SetupView> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ElectionProvider>(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -218,12 +217,17 @@ class _SetupViewState extends State<SetupView> {
                     const SizedBox(width: 16),
                     // Symbol Picker button
                     Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => _showSymbolGrid(context),
-                        icon: ElectionSymbol(name: _selectedSymbol, size: 28),
-                        label: Text(_selectedSymbol),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      child: Semantics(
+                        label: 'Symbol picker. Current selected symbol is $_selectedSymbol. Double tap to change symbol.',
+                        button: true,
+                        excludeSemantics: true,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _showSymbolGrid(context),
+                          icon: ElectionSymbol(name: _selectedSymbol, size: 28),
+                          label: Text(_selectedSymbol),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          ),
                         ),
                       ),
                     ),
@@ -285,6 +289,7 @@ class _SetupViewState extends State<SetupView> {
                             const SizedBox(width: 8),
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
+                              tooltip: 'Delete candidate ${cand.name}',
                               onPressed: () => provider.deleteCandidate(cand.id),
                             )
                           ],
@@ -436,22 +441,27 @@ class _SetupViewState extends State<SetupView> {
               itemCount: ElectionSymbol.availableSymbols.length,
               itemBuilder: (context, idx) {
                 final symbol = ElectionSymbol.availableSymbols[idx];
-                return InkWell(
-                  onTap: () {
-                    setState(() => _selectedSymbol = symbol);
-                    Navigator.pop(ctx);
-                  },
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElectionSymbol(name: symbol, size: 40),
-                      const SizedBox(height: 4),
-                      Text(
-                        symbol,
-                        style: const TextStyle(fontSize: 10),
-                        overflow: TextOverflow.ellipsis,
-                      )
-                    ],
+                return Semantics(
+                  label: '$symbol symbol. Double tap to select.',
+                  button: true,
+                  excludeSemantics: true,
+                  child: InkWell(
+                    onTap: () {
+                      setState(() => _selectedSymbol = symbol);
+                      Navigator.pop(ctx);
+                    },
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElectionSymbol(name: symbol, size: 40),
+                        const SizedBox(height: 4),
+                        Text(
+                          symbol,
+                          style: const TextStyle(fontSize: 10),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      ],
+                    ),
                   ),
                 );
               },

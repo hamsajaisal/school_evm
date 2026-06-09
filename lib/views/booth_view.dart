@@ -158,6 +158,7 @@ class _BoothViewState extends State<BoothView> {
     return Semantics(
       label: 'Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}. Double tap to vote.',
       button: true,
+      excludeSemantics: true,
       child: Card(
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -342,7 +343,10 @@ class _BoothViewState extends State<BoothView> {
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.indigo),
               ),
               const SizedBox(height: 12),
-              ElectionSymbol(name: cand.symbolName, size: 72),
+              Semantics(
+                label: 'Candidate symbol: ${cand.symbolName}',
+                child: ElectionSymbol(name: cand.symbolName, size: 72),
+              ),
             ],
           ),
           actions: [

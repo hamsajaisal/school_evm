@@ -127,29 +127,33 @@ class _HomeViewState extends State<HomeView> {
                   const SizedBox(height: 48),
                   // Footer metadata info
                   if (provider.db.settings != null)
-                    Card(
-                      elevation: 0,
-                      color: (isDark ? Colors.white : Colors.black).withOpacity(0.04),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_circle_outline_rounded,
-                                color: Colors.green[600], size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Active Election Profile: ${provider.db.settings!.schoolName} (${provider.db.settings!.year})',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: isDark ? Colors.white70 : Colors.black87,
+                    Semantics(
+                      label: 'Active Election Profile: ${provider.db.settings!.schoolName} (${provider.db.settings!.year})',
+                      excludeSemantics: true,
+                      child: Card(
+                        elevation: 0,
+                        color: (isDark ? Colors.white : Colors.black).withOpacity(0.04),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_outline_rounded,
+                                  color: Colors.green[600], size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Active Election Profile: ${provider.db.settings!.schoolName} (${provider.db.settings!.year})',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -170,12 +174,14 @@ class _HomeViewState extends State<HomeView> {
     required List<Color> gradient,
     required VoidCallback onTap,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
+    return Semantics(
+      label: '$title. $subtitle. Double tap to select.',
+      button: true,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
         height: 280,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
@@ -241,8 +247,9 @@ class _HomeViewState extends State<HomeView> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _showConnectDialog(BuildContext context) {
     final provider = Provider.of<ElectionProvider>(context, listen: false);
