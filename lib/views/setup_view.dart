@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../services/election_provider.dart';
 import '../widgets/election_symbols.dart';
 import 'controller_view.dart';
@@ -326,21 +327,66 @@ class _SetupViewState extends State<SetupView> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    if (_csvPasteCtrl.text.isEmpty) return;
-                    final count = await provider.importVotersFromCSV(_csvPasteCtrl.text);
-                    _csvPasteCtrl.clear();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Successfully imported $count voters!')),
-                    );
-                  },
-                  icon: const Icon(Icons.file_download_rounded),
-                  label: const Text('Parse & Add CSV List'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.teal,
-                    foregroundColor: Colors.white,
-                  ),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        if (_csvPasteCtrl.text.isEmpty) return;
+                        final count = await provider.importVotersFromCSV(_csvPasteCtrl.text);
+                        _csvPasteCtrl.clear();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Successfully imported $count voters!')),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.file_download_rounded),
+                      label: const Text('Parse & Add CSV List'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        try {
+                          final result = await FilePicker.platform.pickFiles(
+                            type: FileType.custom,
+                            allowedExtensions: ['xlsx', 'xls'],
+                            withData: true,
+                          );
+                          if (result != null && result.files.isNotEmpty) {
+                            final file = result.files.first;
+                            final bytes = file.bytes;
+                            if (bytes != null) {
+                              final count = await provider.importVotersFromExcel(bytes);
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Successfully imported $count voters from Excel!')),
+                                );
+                              }
+                            } else {
+                              throw 'Could not read file bytes.';
+                            }
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error importing Excel: $e')),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.table_chart_rounded),
+                      label: const Text('Import Excel (.xlsx)'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 const Divider(),

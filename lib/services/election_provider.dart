@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:excel/excel.dart';
 import '../models/candidate.dart';
 import '../models/voter.dart';
 import '../models/election_settings.dart';
@@ -144,6 +145,60 @@ class ElectionProvider extends ChangeNotifier {
         final name = parts[2].trim();
         final classLvl = parts.length > 3 ? parts[3].trim() : (db.settings?.targetClass ?? '');
         final div = parts.length > 4 ? parts[4].trim() : '';
+
+        if (admNo.isNotEmpty && name.isNotEmpty) {
+          imported.add(Voter(
+            serialNumber: serial.isEmpty ? (db.voters.length + imported.length + 1).toString() : serial,
+            admissionNumber: admNo,
+            fullName: name,
+            classLevel: classLvl,
+            division: div,
+          ));
+          successCount++;
+        }
+      }
+    }
+
+    if (imported.isNotEmpty) {
+      await db.addVoters(imported);
+    }
+    return successCount;
+  }
+
+  // Bulk Import Voters from Excel (.xlsx) bytes
+  Future<int> importVotersFromExcel(List<int> bytes) async {
+    final excel = Excel.decodeBytes(bytes);
+    final List<Voter> imported = [];
+    int successCount = 0;
+
+    for (var table in excel.tables.keys) {
+      final sheet = excel.tables[table];
+      if (sheet == null || sheet.maxRows == 0) continue;
+
+      // Check if first row contains header strings
+      bool hasHeader = false;
+      if (sheet.maxRows > 0) {
+        final firstRow = sheet.rows[0];
+        for (var cell in firstRow) {
+          final valStr = cell?.value?.toString().toLowerCase() ?? '';
+          if (valStr.contains('name') || valStr.contains('admission') || valStr.contains('serial') || valStr.contains('adm')) {
+            hasHeader = true;
+            break;
+          }
+        }
+      }
+
+      final startRow = hasHeader ? 1 : 0;
+      for (int i = startRow; i < sheet.maxRows; i++) {
+        final row = sheet.rows[i];
+        if (row.isEmpty) continue;
+
+        // Extract: Serial, AdmissionNo, Name, [Class], [Division]
+        final serial = row.isNotEmpty ? row[0]?.value?.toString().trim() ?? '' : '';
+        final admNo = row.length > 1 ? row[1]?.value?.toString().trim() ?? '' : '';
+        final name = row.length > 2 ? row[2]?.value?.toString().trim() ?? '' : '';
+        final classLvl = row.length > 3 ? row[3]?.value?.toString().trim() ?? '' : (db.settings?.targetClass ?? '');
+        final div = row.length > 4 ? row[4]?.value?.toString().trim() ?? '' : '';
 
         if (admNo.isNotEmpty && name.isNotEmpty) {
           imported.add(Voter(
