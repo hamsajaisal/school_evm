@@ -219,8 +219,9 @@ class _SetupViewState extends State<SetupView> {
                     // Symbol Picker button
                     Expanded(
                       child: Semantics(
-                        label: 'Symbol picker. Current selected symbol is $_selectedSymbol. Double tap to change symbol.',
+                        label: 'Symbol picker. Current selected symbol is $_selectedSymbol.',
                         button: true,
+                        onTap: () => _showSymbolGrid(context),
                         excludeSemantics: true,
                         child: OutlinedButton.icon(
                           onPressed: () => _showSymbolGrid(context),

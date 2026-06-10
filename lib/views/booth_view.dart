@@ -20,6 +20,15 @@ class _BoothViewState extends State<BoothView> {
     final provider = Provider.of<ElectionProvider>(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Auto-pop to HomeView if connection is lost
+    if (!provider.net.isConnected && provider.net.role == NetworkRole.none) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      });
+    }
+
     switch (provider.boothState) {
       case BoothState.locked:
         return _buildLockedScreen(context, isDark);
@@ -158,6 +167,7 @@ class _BoothViewState extends State<BoothView> {
     return Semantics(
       label: 'Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}. Double tap to vote.',
       button: true,
+      onTap: () => _confirmVote(context, provider, cand),
       excludeSemantics: true,
       child: Card(
         elevation: 2,

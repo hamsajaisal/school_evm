@@ -1,30 +1,55 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:provider/provider.dart';
 import 'package:school_evm/main.dart';
+import 'package:school_evm/services/election_provider.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+
+class FakePathProviderPlatform extends PathProviderPlatform with MockPlatformInterfaceMixin {
+  @override
+  Future<String?> getTemporaryPath() async => '.';
+  @override
+  Future<String?> getApplicationSupportPath() async => '.';
+  @override
+  Future<String?> getLibraryPath() async => '.';
+  @override
+  Future<String?> getApplicationDocumentsPath() async => '.';
+  @override
+  Future<String?> getExternalStoragePath() async => '.';
+  @override
+  Future<List<String>?> getExternalCachePaths() async => ['.'];
+  @override
+  Future<List<String>?> getExternalStoragePaths({StorageDirectory? type}) async => ['.'];
+  @override
+  Future<String?> getDownloadsPath() async => '.';
+}
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  setUpAll(() {
+    PathProviderPlatform.instance = FakePathProviderPlatform();
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('App branding smoke test', (WidgetTester tester) async {
+    final provider = ElectionProvider();
+    
+    // Run async provider initialization in the real async zone
+    await tester.runAsync(() async {
+      await provider.init();
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    await tester.pumpWidget(
+      ChangeNotifierProvider(
+        create: (_) => provider,
+        child: const MyApp(),
+      ),
+    );
+
+    // Let the database initialization settle
+    await tester.pump(const Duration(milliseconds: 100));
+
+    // Verify that the title text exists
+    expect(find.text('School EVM Pro'), findsOneWidget);
   });
 }

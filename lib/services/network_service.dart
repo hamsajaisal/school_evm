@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'server_factory.dart';
@@ -59,6 +61,7 @@ class NetworkService extends ChangeNotifier {
 
     _serverIp = await _server!.getLocalIp();
     notifyListeners();
+    _startUdpBroadcast();
   }
 
   // Client Mode (E.g. Windows PC connecting to Phone Host)
@@ -73,8 +76,13 @@ class NetworkService extends ChangeNotifier {
 
     final uri = Uri.parse('ws://$ipAddress:$port');
     try {
-      _channel = WebSocketChannel.connect(uri);
+      final channel = WebSocketChannel.connect(uri);
+      // Wait for handshake connection to succeed (up to 5 seconds)
+      await channel.ready.timeout(const Duration(seconds: 5));
+      
+      _channel = channel;
       _isConnected = true;
+      _boothState = BoothState.locked;
       notifyListeners();
 
       _channel!.stream.listen(
@@ -98,11 +106,14 @@ class NetworkService extends ChangeNotifier {
       _isConnected = false;
       _role = NetworkRole.none;
       notifyListeners();
+      rethrow;
     }
   }
 
   // Stop connection/hosting
   Future<void> stop() async {
+    _stopUdpBroadcast();
+    stopListeningForHost();
     if (_server != null) {
       await _server!.stop();
       _server = null;
@@ -223,5 +234,73 @@ class NetworkService extends ChangeNotifier {
     } catch (e) {
       print('Error parsing network message: $e');
     }
+  }
+
+  // UDP Auto-Discovery Broadcast & Listener variables
+  static const int _udpPort = 8888;
+  RawDatagramSocket? _udpBroadcastSocket;
+  Timer? _udpBroadcastTimer;
+  RawDatagramSocket? _udpListenerSocket;
+  StreamSubscription? _udpListenerSub;
+
+  // Host: Start UDP Broadcast
+  void _startUdpBroadcast() async {
+    _stopUdpBroadcast();
+    if (kIsWeb) return;
+    try {
+      _udpBroadcastSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      _udpBroadcastSocket!.broadcastEnabled = true;
+      _udpBroadcastTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+        if (_serverIp != null) {
+          final data = utf8.encode('SCHOOL_EVM_HOST:$_serverIp');
+          try {
+            _udpBroadcastSocket!.send(
+              data,
+              InternetAddress('255.255.255.255'),
+              _udpPort,
+            );
+          } catch (_) {}
+        }
+      });
+    } catch (e) {
+      debugPrint('Error starting UDP broadcast: $e');
+    }
+  }
+
+  void _stopUdpBroadcast() {
+    _udpBroadcastTimer?.cancel();
+    _udpBroadcastTimer = null;
+    _udpBroadcastSocket?.close();
+    _udpBroadcastSocket = null;
+  }
+
+  // Client: Start listening for Host discovery
+  void startListeningForHost(Function(String hostIp) onHostFound) async {
+    stopListeningForHost();
+    if (kIsWeb) return;
+    try {
+      _udpListenerSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, _udpPort);
+      _udpListenerSub = _udpListenerSocket!.listen((event) {
+        if (event == RawSocketEvent.read) {
+          final datagram = _udpListenerSocket!.receive();
+          if (datagram != null) {
+            final message = utf8.decode(datagram.data);
+            if (message.startsWith('SCHOOL_EVM_HOST:')) {
+              final ip = message.substring('SCHOOL_EVM_HOST:'.length);
+              onHostFound(ip);
+            }
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Error starting UDP listener: $e');
+    }
+  }
+
+  void stopListeningForHost() {
+    _udpListenerSub?.cancel();
+    _udpListenerSub = null;
+    _udpListenerSocket?.close();
+    _udpListenerSocket = null;
   }
 }

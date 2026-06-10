@@ -177,6 +177,7 @@ class _HomeViewState extends State<HomeView> {
     return Semantics(
       label: '$title. $subtitle. Double tap to select.',
       button: true,
+      onTap: onTap,
       excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
@@ -253,78 +254,164 @@ class _HomeViewState extends State<HomeView> {
 
   void _showConnectDialog(BuildContext context) {
     final provider = Provider.of<ElectionProvider>(context, listen: false);
+    
+    String? discoveredIp;
+    bool isConnecting = false;
+    String? errorMessage;
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Row(
-            children: [
-              Icon(Icons.wifi_find_rounded, color: Colors.amber),
-              SizedBox(width: 8),
-              Text('Connect to Controller'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter the IP Address displayed on the Teacher\'s Controller screen:',
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _ipController,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(
-                  hintText: 'e.g. 192.168.1.5',
-                  labelText: 'Controller IP Address',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  prefixIcon: const Icon(Icons.network_wifi_rounded),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final ip = _ipController.text.trim();
-                if (ip.isNotEmpty) {
-                  Navigator.pop(ctx);
-                  
-                  // Connect as client on port 8080
-                  await provider.startAsBoothClient(ip, 8080);
-                  
-                  if (mounted) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const BoothView()),
-                    );
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            
+            // Listen for UDP host broadcasts
+            provider.net.startListeningForHost((ip) {
+              if (discoveredIp != ip) {
+                setDialogState(() {
+                  discoveredIp = ip;
+                  if (_ipController.text == '192.168.1.') {
+                    _ipController.text = ip;
                   }
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber[700],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                });
+              }
+            });
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: const Text('Connect'),
-            ),
-          ],
+              title: const Row(
+                children: [
+                  Icon(Icons.wifi_find_rounded, color: Colors.amber),
+                  SizedBox(width: 8),
+                  Text('Connect to Controller'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (discoveredIp != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green[400]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green[600]),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Auto-Detected Controller at: $discoveredIp',
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700]),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  const Text(
+                    'Enter the IP Address displayed on the Teacher\'s Controller screen:',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _ipController,
+                    enabled: !isConnecting,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. 192.168.1.5',
+                      labelText: 'Controller IP Address',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      prefixIcon: const Icon(Icons.network_wifi_rounded),
+                    ),
+                  ),
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      errorMessage!,
+                      style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isConnecting ? null : () {
+                    provider.net.stopListeningForHost();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: isConnecting
+                      ? null
+                      : () async {
+                          final ip = _ipController.text.trim();
+                          if (ip.isEmpty) return;
+
+                          setDialogState(() {
+                            isConnecting = true;
+                            errorMessage = null;
+                          });
+
+                          try {
+                            provider.net.stopListeningForHost();
+                            await provider.startAsBoothClient(ip, 8080);
+                            
+                            if (ctx.mounted) {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const BoothView()),
+                              );
+                            }
+                          } catch (e) {
+                            // Restart UDP listening on failure
+                            provider.net.startListeningForHost((ip) {
+                              if (discoveredIp != ip) {
+                                setDialogState(() {
+                                  discoveredIp = ip;
+                                });
+                              }
+                            });
+                            
+                            setDialogState(() {
+                              isConnecting = false;
+                              errorMessage = 'Connection failed. Check IP & Controller status.';
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber[700],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: isConnecting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                        )
+                      : const Text('Connect'),
+                ),
+              ],
+            );
+          },
         );
       },
-    );
+    ).then((_) {
+      provider.net.stopListeningForHost();
+    });
   }
 }
