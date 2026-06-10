@@ -165,88 +165,85 @@ class _BoothViewState extends State<BoothView> {
     bool isDark,
   ) {
     return Semantics(
-      label: 'Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}. Double tap to vote.',
+      label: 'Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}.',
       button: true,
-      onTap: () => _confirmVote(context, provider, cand),
-      excludeSemantics: true,
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        color: isDark ? const Color(0xFF1F1F35) : Colors.white,
-        child: InkWell(
-          onTap: () => _confirmVote(context, provider, cand),
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
-              children: [
-                // Serial Number Key Button
-                Container(
-                  width: 52,
-                  height: 52,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.indigo.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    cand.serialNumber.toString(),
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.indigoAccent,
-                    ),
-                  ),
+      child: ElevatedButton(
+        onPressed: () => _confirmVote(context, provider, cand),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isDark ? const Color(0xFF1F1F35) : Colors.white,
+          foregroundColor: isDark ? Colors.white : Colors.black87,
+          elevation: 2,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shadowColor: isDark ? Colors.transparent : Colors.black26,
+        ),
+        child: Row(
+          children: [
+            // Serial Number Key Button
+            Container(
+              width: 52,
+              height: 52,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.indigo.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                cand.serialNumber.toString(),
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.indigoAccent,
                 ),
-                const SizedBox(width: 16),
-                
-                // Candidate Name
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        cand.name,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Symbol: ${cand.symbolName}',
-                        style: const TextStyle(fontSize: 13, color: Colors.grey),
-                      )
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-
-                // Symbol Image
-                ElectionSymbol(name: cand.symbolName, size: 56),
-                
-                const SizedBox(width: 16),
-                
-                // Big Blue EVM Button
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.blue[600],
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.4),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      )
-                    ],
-                  ),
-                  child: const Icon(Icons.touch_app_rounded, color: Colors.white),
-                ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 16),
+            
+            // Candidate Name
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    cand.name,
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Symbol: ${cand.symbolName}',
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  )
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Symbol Image
+            ElectionSymbol(name: cand.symbolName, size: 56),
+            
+            const SizedBox(width: 16),
+            
+            // Big Blue EVM Button
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.blue[600],
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.blue.withOpacity(0.4),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  )
+                ],
+              ),
+              child: const Icon(Icons.touch_app_rounded, color: Colors.white),
+            ),
+          ],
         ),
       ),
     );

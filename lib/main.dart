@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 import 'services/election_provider.dart';
 import 'views/home_view.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Force enable semantics for Windows/Desktop screen reader engines
+  SemanticsBinding.instance.ensureSemantics();
+  
   final provider = ElectionProvider();
   
   runApp(
