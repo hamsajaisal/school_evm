@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/semantics.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 import '../models/candidate.dart';
@@ -51,6 +52,22 @@ class ElectionProvider extends ChangeNotifier {
         return Candidate.fromMap(Map<String, dynamic>.from(data));
       }).toList();
       _finalSyncResults.sort((a, b) => a.serialNumber.compareTo(b.serialNumber));
+      notifyListeners();
+    };
+
+    // Sync configuration from Host -> Client when client connects
+    net.onClientConnected = () {
+      if (db.settings != null) {
+        final settingsMap = db.settings!.toMap();
+        final candidatesMapList = db.candidates.map((c) => c.toMap()).toList();
+        net.sendElectionConfig(settingsMap, candidatesMapList);
+      }
+    };
+
+    // Client receives configuration from Host
+    net.onSyncConfigReceived = (settingsMap, candidatesList) async {
+      await db.syncElectionConfig(settingsMap, candidatesList);
+      SemanticsService.announce("Election settings and candidates synchronized from controller", TextDirection.ltr);
       notifyListeners();
     };
 
@@ -285,6 +302,12 @@ class ElectionProvider extends ChangeNotifier {
       // 3. Inform host controller
       net.notifyVoteCast(voterAdm, candidateId);
       notifyListeners();
+
+      // 4. Accessibility announcement
+      SemanticsService.announce(
+        "Thank you! Your vote has been successfully cast. Please exit the booth.",
+        TextDirection.ltr,
+      );
     }
   }
 

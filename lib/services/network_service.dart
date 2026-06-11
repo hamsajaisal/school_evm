@@ -40,6 +40,8 @@ class NetworkService extends ChangeNotifier {
   Function(String candidateId)? onVoteReceived;
   Function(String admissionNumber)? onVoteCastNotification;
   Function(List<dynamic> candidatesSync)? onSyncResultsReceived;
+  VoidCallback? onClientConnected;
+  Function(Map<String, dynamic> settings, List<dynamic> candidates)? onSyncConfigReceived;
 
   // Host/Server Mode (E.g. Controller phone hosting)
   Future<void> startHosting(
@@ -241,6 +243,18 @@ class NetworkService extends ChangeNotifier {
     }
   }
 
+  // Send settings and candidate lists from Host -> Client at pairing/handshake
+  void sendElectionConfig(Map<String, dynamic> settings, List<Map<String, dynamic>> candidates) {
+    if (_role == NetworkRole.host && _isConnected) {
+      final packet = {
+        'action': 'SYNC_CONFIG',
+        'settings': settings,
+        'candidates': candidates,
+      };
+      _server!.broadcast(jsonEncode(packet));
+    }
+  }
+
   // Process incoming JSON packets
   void _handleIncomingMessage(String message) {
     try {
@@ -254,6 +268,15 @@ class NetworkService extends ChangeNotifier {
             _isConnected = true;
             notifyListeners();
             SemanticsService.announce("Voting booth connected successfully", TextDirection.ltr);
+            onClientConnected?.call();
+          }
+          break;
+
+        case 'SYNC_CONFIG':
+          if (_role == NetworkRole.client) {
+            final settings = packet['settings'] as Map<String, dynamic>;
+            final candidates = packet['candidates'] as List<dynamic>;
+            onSyncConfigReceived?.call(settings, candidates);
           }
           break;
 

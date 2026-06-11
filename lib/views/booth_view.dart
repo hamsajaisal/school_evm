@@ -15,6 +15,8 @@ class BoothView extends StatefulWidget {
 }
 
 class _BoothViewState extends State<BoothView> {
+  String? _votedCandidateId;
+  bool _isShowingGlow = false;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +32,9 @@ class _BoothViewState extends State<BoothView> {
       });
     }
 
-    switch (provider.boothState) {
+    final effectiveState = _isShowingGlow ? BoothState.activeVoting : provider.boothState;
+
+    switch (effectiveState) {
       case BoothState.locked:
         return _buildLockedScreen(context, isDark);
       case BoothState.activeVoting:
@@ -48,6 +52,7 @@ class _BoothViewState extends State<BoothView> {
       body: Semantics(
         label: 'Voting booth locked. Please wait for the teacher to authorize you.',
         focused: true,
+        excludeSemantics: true,
         child: Container(
           width: double.infinity,
           decoration: BoxDecoration(
@@ -165,11 +170,13 @@ class _BoothViewState extends State<BoothView> {
     Candidate cand,
     bool isDark,
   ) {
+    final isVoted = _votedCandidateId == cand.id;
     return Semantics(
-      label: 'Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}.',
+      label: 'Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}. ${isVoted ? "Voting..." : "Press Enter or double-tap to vote."}',
       button: true,
+      excludeSemantics: true,
       child: ElevatedButton(
-        onPressed: () => _confirmVote(context, provider, cand),
+        onPressed: _isShowingGlow ? null : () => _confirmVote(context, provider, cand),
         style: ElevatedButton.styleFrom(
           backgroundColor: isDark ? const Color(0xFF1F1F35) : Colors.white,
           foregroundColor: isDark ? Colors.white : Colors.black87,
@@ -226,6 +233,11 @@ class _BoothViewState extends State<BoothView> {
             ElectionSymbol(name: cand.symbolName, size: 56),
             
             const SizedBox(width: 16),
+
+            // Red LED Indicator Clue
+            _buildLedLight(cand.id),
+
+            const SizedBox(width: 16),
             
             // Big Blue EVM Button
             Container(
@@ -250,12 +262,38 @@ class _BoothViewState extends State<BoothView> {
     );
   }
 
+  Widget _buildLedLight(String candidateId) {
+    final isVoted = _votedCandidateId == candidateId;
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isVoted ? Colors.redAccent : Colors.red[950],
+        border: Border.all(
+          color: isVoted ? Colors.redAccent : (Colors.grey[700] ?? Colors.grey),
+          width: 2,
+        ),
+        boxShadow: isVoted
+            ? [
+                BoxShadow(
+                  color: Colors.red.withOpacity(0.8),
+                  blurRadius: 10,
+                  spreadRadius: 3,
+                )
+              ]
+            : [],
+      ),
+    );
+  }
+
   // 3. Success Cast Screen (with Beep)
   Widget _buildSuccessScreen(BuildContext context, bool isDark) {
     return Scaffold(
       body: Semantics(
         label: 'Thank you! Your vote has been successfully cast. Please leave the booth.',
         focused: true,
+        excludeSemantics: true,
         child: Container(
           width: double.infinity,
           color: isDark ? const Color(0xFF11111E) : Colors.white,
@@ -336,6 +374,10 @@ class _BoothViewState extends State<BoothView> {
   }
 
   void _confirmVote(BuildContext context, ElectionProvider provider, Candidate cand) {
+    SemanticsService.announce(
+      "Confirm your ballot. You selected candidate ${cand.name} with symbol ${cand.symbolName}. Press Tab to choose Change or Confirm Vote.",
+      TextDirection.ltr,
+    );
     showDialog(
       context: context,
       builder: (ctx) {
@@ -363,10 +405,24 @@ class _BoothViewState extends State<BoothView> {
               child: const Text('Change'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(ctx);
-                provider.castVoterBallot(cand.id);
-                SemanticsService.announce("Vote cast successfully", TextDirection.ltr);
+                
+                setState(() {
+                  _votedCandidateId = cand.id;
+                  _isShowingGlow = true;
+                });
+                
+                await provider.castVoterBallot(cand.id);
+                
+                await Future.delayed(const Duration(milliseconds: 1500));
+                
+                if (mounted) {
+                  setState(() {
+                    _isShowingGlow = false;
+                    _votedCandidateId = null;
+                  });
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.indigo,

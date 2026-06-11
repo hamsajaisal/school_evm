@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 import '../services/election_provider.dart';
 import '../widgets/election_symbols.dart';
@@ -83,8 +84,35 @@ class _LiveCountViewState extends State<LiveCountView> {
       _currentIndex += 1;
     });
 
+    // Spoken announcement for the drawn ballot
+    SemanticsService.announce(
+      "Vote drawn for ${candidate.name}, symbol ${candidate.symbolName}",
+      TextDirection.ltr,
+    );
+
     if (_currentIndex >= _shuffledVotes.length) {
       _stopAutoPlay();
+      
+      // Calculate winner and announce at the end
+      Candidate? winner;
+      int maxVotes = -1;
+      for (var cand in provider.db.candidates) {
+        final votes = _liveTally[cand.id] ?? 0;
+        if (votes > maxVotes) {
+          maxVotes = votes;
+          winner = cand;
+        }
+      }
+      
+      if (winner != null) {
+        // Delay slightly to not conflict with the last vote announcement
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          SemanticsService.announce(
+            "Counting complete. Winner is ${winner!.name} with $maxVotes votes.",
+            TextDirection.ltr,
+          );
+        });
+      }
     }
   }
 
@@ -201,9 +229,19 @@ class _LiveCountViewState extends State<LiveCountView> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               // Ballot box drawing button
-                              GestureDetector(
+                              InkWell(
                                 onTap: (_isAutoPlaying || isFinished) ? null : _drawNextBallot,
-                                child: _buildBallotBoxWidget(isDark, isFinished),
+                                borderRadius: BorderRadius.circular(70),
+                                child: Semantics(
+                                  label: isFinished
+                                      ? 'Ballot box. Counting complete.'
+                                      : _isAutoPlaying
+                                          ? 'Ballot box. Auto counting in progress.'
+                                          : 'Ballot box. Tap or press Enter to draw the next ballot.',
+                                  button: true,
+                                  excludeSemantics: true,
+                                  child: _buildBallotBoxWidget(isDark, isFinished),
+                                ),
                               ),
                               const SizedBox(height: 24),
                               

@@ -38,6 +38,10 @@ class DatabaseService extends ChangeNotifier {
     _loadData();
   }
 
+  void reloadData() {
+    _loadData();
+  }
+
   void _loadData() {
     final settingsBox = Hive.box(_settingsBoxName);
     final candidatesBox = Hive.box(_candidatesBoxName);
@@ -97,6 +101,25 @@ class DatabaseService extends ChangeNotifier {
     _voters = [];
     _anonymousVotes = [];
     notifyListeners();
+  }
+
+  // Sync election config (used by booth client to save synced settings and candidates)
+  Future<void> syncElectionConfig(Map<dynamic, dynamic> settingsMap, List<dynamic> candidatesList) async {
+    await Hive.box(_settingsBoxName).clear();
+    await Hive.box(_candidatesBoxName).clear();
+    await Hive.box(_votersBoxName).clear();
+    await Hive.box(_votesBoxName).clear();
+
+    final settings = ElectionSettings.fromMap(Map<String, dynamic>.from(settingsMap));
+    await Hive.box(_settingsBoxName).put('current_settings', settings.toMap());
+
+    final candidatesBox = Hive.box(_candidatesBoxName);
+    for (var item in candidatesList) {
+      final candidate = Candidate.fromMap(Map<String, dynamic>.from(item));
+      await candidatesBox.put(candidate.id, candidate.toMap());
+    }
+
+    _loadData();
   }
 
   // Add Candidate

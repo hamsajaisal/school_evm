@@ -1,6 +1,10 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <thread>
+
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -25,6 +29,26 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+
+  // Register the custom method channel for buzzer beep
+  flutter::MethodChannel<flutter::EncodableValue> buzzer_channel(
+      flutter_controller_->engine()->messenger(),
+      "com.schoolevm/buzzer",
+      &flutter::StandardMethodCodec::GetInstance());
+
+  buzzer_channel.SetMethodCallHandler(
+      [](const flutter::MethodCall<flutter::EncodableValue>& call,
+         std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+        if (call.method_name() == "playBeep") {
+          std::thread([]() {
+            ::Beep(750, 1000); // 750Hz, 1 second duration
+          }).detach();
+          result->Success(flutter::EncodableValue(true));
+        } else {
+          result->NotImplemented();
+        }
+      });
+
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
