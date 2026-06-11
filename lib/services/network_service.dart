@@ -59,21 +59,35 @@ class NetworkService extends ChangeNotifier {
     this.onVoteCastNotification = onVoteCastNotification;
     _server = createServer();
     
-    await _server!.start(
-      port,
-      _handleIncomingMessage,
-      (connected) {
-        _isConnected = connected;
-        notifyListeners();
-        if (!connected) {
-          SemanticsService.announce("Voting booth disconnected", TextDirection.ltr);
-        }
-      },
-    );
+    try {
+      await _server!.start(
+        port,
+        _handleIncomingMessage,
+        (connected) {
+          _isConnected = connected;
+          notifyListeners();
+          if (!connected) {
+            SemanticsService.announce("Voting booth disconnected", TextDirection.ltr);
+          }
+        },
+      );
 
-    _serverIp = await _server!.getLocalIp();
-    notifyListeners();
-    _startUdpBroadcast();
+      _serverIp = await _server!.getLocalIp();
+      notifyListeners();
+      _startUdpBroadcast();
+    } catch (e) {
+      debugPrint('Error starting server: $e');
+      _role = NetworkRole.none;
+      _server = null;
+      _serverIp = 'Error: $e';
+      notifyListeners();
+      
+      // Accessibility screen reader announcement
+      SemanticsService.announce(
+        "Server failed to start. Check network connection.",
+        TextDirection.ltr,
+      );
+    }
   }
 
   // Client Mode (E.g. Windows PC connecting to Phone Host)

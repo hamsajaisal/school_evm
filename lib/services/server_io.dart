@@ -68,7 +68,33 @@ class BoothServerImpl implements BoothServer {
   @override
   Future<String?> getLocalIp() async {
     try {
-      for (var interface in await NetworkInterface.list()) {
+      final interfaces = await NetworkInterface.list();
+      
+      // 1. Try to find a Wi-Fi or Ethernet interface first
+      for (var interface in interfaces) {
+        final name = interface.name.toLowerCase();
+        if (name.contains('wlan') || name.contains('wifi') || name.contains('eth') || name.contains('en')) {
+          for (var addr in interface.addresses) {
+            if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+              return addr.address;
+            }
+          }
+        }
+      }
+      
+      // 2. Fallback to any non-loopback, non-cellular/p2p IPv4 interface
+      for (var interface in interfaces) {
+        final name = interface.name.toLowerCase();
+        if (name.contains('lo') || name.contains('rmnet') || name.contains('p2p')) continue;
+        for (var addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+            return addr.address;
+          }
+        }
+      }
+
+      // 3. Last resort fallback: any IPv4
+      for (var interface in interfaces) {
         for (var addr in interface.addresses) {
           if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
             return addr.address;
