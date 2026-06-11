@@ -18,7 +18,6 @@ class ControllerView extends StatefulWidget {
 
 class _ControllerViewState extends State<ControllerView> {
   String _searchQuery = '';
-  Voter? _selectedVoter;
   final TextEditingController _searchCtrl = TextEditingController();
 
   @override
@@ -59,13 +58,80 @@ class _ControllerViewState extends State<ControllerView> {
     final ipAddress = provider.net.serverIp ?? 'Retrieving IP...';
     final isConnected = provider.net.isConnected;
 
+    final isMobile = MediaQuery.of(context).size.width < 700;
+
+    Widget leftPanel = _buildLeftPanel(
+      context,
+      provider,
+      isDark,
+      ipAddress,
+      isConnected,
+      totalVoters,
+      votedCount,
+      turnoutPct,
+    );
+
+    Widget rightPanel = _buildRightPanel(
+      context,
+      provider,
+      filteredVoters,
+      isDark,
+    );
+
+    if (isMobile) {
+      return DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Election Controller Desk'),
+            backgroundColor: Colors.indigo,
+            foregroundColor: Colors.white,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf_rounded),
+                tooltip: 'Print Voter Slips',
+                onPressed: () {
+                  if (provider.db.settings != null && provider.db.voters.isNotEmpty) {
+                    PdfService.generateAndPrintVoterSlips(provider.db.voters, provider.db.settings!);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Setup incomplete or no voters found.')),
+                    );
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh_rounded),
+                tooltip: 'Reset Election',
+                onPressed: () => _confirmReset(context, provider),
+              ),
+            ],
+            bottom: const TabBar(
+              indicatorColor: Colors.white,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white70,
+              tabs: [
+                Tab(icon: Icon(Icons.people_rounded), text: 'Voters List'),
+                Tab(icon: Icon(Icons.wifi_tethering_rounded), text: 'Pairing & Stats'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              rightPanel,
+              leftPanel,
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Election Controller Desk'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
         actions: [
-          // Export slips
           IconButton(
             icon: const Icon(Icons.picture_as_pdf_rounded),
             tooltip: 'Print Voter Slips',
@@ -79,7 +145,6 @@ class _ControllerViewState extends State<ControllerView> {
               }
             },
           ),
-          // Reset election completely
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Reset Election',
@@ -90,330 +155,380 @@ class _ControllerViewState extends State<ControllerView> {
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Left Panel: Network Setup & Stats
-          Expanded(
-            flex: 2,
-            child: Container(
-              color: isDark ? const Color(0xFF181824) : Colors.indigo.withOpacity(0.03),
-              padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Expanded(flex: 2, child: leftPanel),
+          Expanded(flex: 3, child: rightPanel),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLeftPanel(
+    BuildContext context,
+    ElectionProvider provider,
+    bool isDark,
+    String ipAddress,
+    bool isConnected,
+    int totalVoters,
+    int votedCount,
+    double turnoutPct,
+  ) {
+    return Container(
+      color: isDark ? const Color(0xFF181824) : Colors.indigo.withOpacity(0.03),
+      padding: const EdgeInsets.all(20),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Pairing Header
+            const Text('Booth Pairing', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            
+            // Connection Status Card
+            Card(
+              elevation: 0,
+              color: isConnected ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: isConnected ? Colors.green : Colors.orange,
+                  width: 1,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
                   children: [
-                    // Pairing Header
-                    const Text('Booth Pairing', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    
-                    // Connection Status Card
-                    Card(
-                      elevation: 0,
-                      color: isConnected ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: isConnected ? Colors.green : Colors.orange,
-                          width: 1,
+                    Icon(
+                      isConnected ? Icons.check_circle : Icons.warning_rounded,
+                      color: isConnected ? Colors.green : Colors.orange,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isConnected
+                            ? 'Voting Booth Connected!'
+                            : 'Waiting for Booth to Connect...',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: isConnected ? Colors.green[800] : Colors.orange[800],
                         ),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          children: [
-                            Icon(
-                              isConnected ? Icons.check_circle : Icons.warning_rounded,
-                              color: isConnected ? Colors.green : Colors.orange,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                isConnected
-                                    ? 'Voting Booth Connected!'
-                                    : 'Waiting for Booth to Connect...',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isConnected ? Colors.green[800] : Colors.orange[800],
-                                ),
-                              ),
-                            )
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Host IP Card & QR Code
-                    Center(
-                      child: Column(
-                        children: [
-                          Text('IP Address: $ipAddress', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                          const SizedBox(height: 8),
-                          if (provider.net.serverIp != null)
-                            QrImageView(
-                              data: provider.net.serverIp!,
-                              version: QrVersions.auto,
-                              size: 160.0,
-                              eyeStyle: QrEyeStyle(
-                                eyeShape: QrEyeShape.square,
-                                color: isDark ? Colors.white : Colors.indigo,
-                              ),
-                              dataModuleStyle: QrDataModuleStyle(
-                                dataModuleShape: QrDataModuleShape.square,
-                                color: isDark ? Colors.white : Colors.indigo,
-                              ),
-                            ),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Scan this QR code from the student\'s Voting Booth device to link them instantly.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 12),
-
-                    // Stats Dashboard
-                    const Text('Turnout Stats', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(
-                      value: totalVoters > 0 ? (votedCount / totalVoters) : 0,
-                      backgroundColor: Colors.grey[300],
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.indigo),
-                      minHeight: 12,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('$votedCount / $totalVoters Voted'),
-                        Text('${turnoutPct.toStringAsFixed(1)}% Turnout'),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    const Divider(),
-                    const SizedBox(height: 12),
-
-                    // Finish Election Actions
-                    const Text('Controls', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    if (provider.db.settings?.isElectionFinished ?? false) ...[
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const LiveCountView()),
-                          );
-                        },
-                        icon: const Icon(Icons.bar_chart_rounded),
-                        label: const Text('Start Live Count Animation'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size.fromHeight(50),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ] else ...[
-                      ElevatedButton.icon(
-                        onPressed: () => _confirmFinish(context, provider),
-                        icon: const Icon(Icons.lock_clock_rounded),
-                        label: const Text('Finish Voting & End Election'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red[600],
-                          foregroundColor: Colors.white,
-                          minimumSize: const Size.fromHeight(50),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
-                    ],
+                    )
                   ],
                 ),
               ),
             ),
-          ),
-          
-          // Right Panel: Voter List & Selection
-          Expanded(
-            flex: 3,
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
+            const SizedBox(height: 16),
+
+            // Host IP Card & QR Code
+            Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text('IP Address: $ipAddress', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  if (provider.net.serverIp != null)
+                    QrImageView(
+                      data: provider.net.serverIp!,
+                      version: QrVersions.auto,
+                      size: 160.0,
+                      eyeStyle: QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: isDark ? Colors.white : Colors.indigo,
+                      ),
+                      dataModuleStyle: QrDataModuleStyle(
+                        dataModuleShape: QrDataModuleShape.square,
+                        color: isDark ? Colors.white : Colors.indigo,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
                   const Text(
-                    'Student Voter Directory',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    'Scan this QR code from the student\'s Voting Booth device to link them instantly.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-                  const SizedBox(height: 16),
-                  
-                  // Search Bar
-                  TextField(
-                    controller: _searchCtrl,
-                    onChanged: (val) => setState(() => _searchQuery = val),
-                    decoration: InputDecoration(
-                      hintText: 'Search by Name, Admission Number, or Serial...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Voters Table List
-                  Expanded(
-                    child: Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.withOpacity(0.2)),
-                      ),
-                      child: filteredVoters.isEmpty
-                          ? const Center(child: Text('No matching voters found.'))
-                          : ListView.separated(
-                              itemCount: filteredVoters.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
-                              itemBuilder: (ctx, idx) {
-                                final voter = filteredVoters[idx];
-                                final isSelected = _selectedVoter?.admissionNumber == voter.admissionNumber;
-                                final isAuthorized = provider.currentlyAuthorizedVoter?.admissionNumber == voter.admissionNumber;
-                                
-                                return ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: voter.hasVoted
-                                        ? Colors.green[50]
-                                        : isSelected
-                                            ? Colors.indigo[100]
-                                            : Colors.grey[100],
-                                    foregroundColor: voter.hasVoted
-                                        ? Colors.green
-                                        : isSelected
-                                            ? Colors.indigo
-                                            : Colors.black54,
-                                    child: Text(voter.serialNumber),
-                                  ),
-                                  title: Text(
-                                    voter.fullName,
-                                    style: TextStyle(
-                                      fontWeight: voter.hasVoted ? FontWeight.normal : FontWeight.w600,
-                                      decoration: voter.hasVoted ? TextDecoration.lineThrough : null,
-                                      color: voter.hasVoted ? Colors.grey : null,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    'Admission No: ${voter.admissionNumber} | Class ${voter.classLevel}-${voter.division}',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                  trailing: _buildStatusWidget(voter, isAuthorized),
-                                  selected: isSelected,
-                                  selectedColor: Colors.indigo,
-                                  onTap: voter.hasVoted
-                                      ? null // Already voted: disabled
-                                      : () {
-                                          setState(() => _selectedVoter = voter);
-                                          SemanticsService.announce("Voter ${voter.fullName} selected", TextDirection.ltr);
-                                        },
-                                );
-                              },
-                            ),
-                    ),
-                  ),
-                  
-                  // Active Control bar at the bottom
-                  if (_selectedVoter != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.indigo.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.indigo.withOpacity(0.2)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Selected Voter:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                              Text(
-                                '${_selectedVoter!.fullName} (${_selectedVoter!.admissionNumber})',
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: !isConnected
-                                ? null // Disable if booth not connected
-                                : () {
-                                    final name = _selectedVoter!.fullName;
-                                    provider.authorizeVoterForBooth(_selectedVoter!);
-                                    setState(() => _selectedVoter = null);
-                                    SemanticsService.announce("Voter $name authorized successfully", TextDirection.ltr);
-                                  },
-                            icon: const Icon(Icons.how_to_reg_rounded),
-                            label: const Text('Authorize to Vote'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.indigo,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  // If someone is currently voting
-                  if (provider.currentlyAuthorizedVoter != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.green.withOpacity(0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Authorized: ${provider.currentlyAuthorizedVoter!.fullName} is in the Voting Booth...',
-                              style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.green),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () => provider.nextVoter(),
-                            child: const Text('Cancel / Next', style: TextStyle(color: Colors.red)),
-                          )
-                        ],
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
-          )
+            
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 12),
+
+            // Stats Dashboard
+            const Text('Turnout Stats', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: totalVoters > 0 ? (votedCount / totalVoters) : 0,
+              backgroundColor: Colors.grey[300],
+              valueColor: const AlwaysStoppedAnimation<Color>(Colors.indigo),
+              minHeight: 12,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('$votedCount / $totalVoters Voted'),
+                Text('${turnoutPct.toStringAsFixed(1)}% Turnout'),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 12),
+
+            // Finish Election Actions
+            const Text('Controls', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (provider.db.settings?.isElectionFinished ?? false) ...[
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LiveCountView()),
+                  );
+                },
+                icon: const Icon(Icons.bar_chart_rounded),
+                label: const Text('Start Live Count Animation'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ] else ...[
+              ElevatedButton.icon(
+                onPressed: () => _confirmFinish(context, provider),
+                icon: const Icon(Icons.lock_clock_rounded),
+                label: const Text('Finish Voting & End Election'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red[600],
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size.fromHeight(50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRightPanel(
+    BuildContext context,
+    ElectionProvider provider,
+    List<Voter> filteredVoters,
+    bool isDark,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Student Voter Directory',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          
+          // Search Bar
+          TextField(
+            controller: _searchCtrl,
+            onChanged: (val) => setState(() => _searchQuery = val),
+            decoration: InputDecoration(
+              hintText: 'Search by Name, Admission Number, or Serial...',
+              prefixIcon: const Icon(Icons.search),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                    )
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Voters Table List
+          Expanded(
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+              ),
+              child: filteredVoters.isEmpty
+                  ? const Center(child: Text('No matching voters found.'))
+                  : ListView.separated(
+                      itemCount: filteredVoters.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (ctx, idx) {
+                        final voter = filteredVoters[idx];
+                        final isAuthorized = provider.currentlyAuthorizedVoter?.admissionNumber == voter.admissionNumber;
+                        
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: voter.hasVoted
+                                ? Colors.green[50]
+                                : Colors.grey[100],
+                            foregroundColor: voter.hasVoted
+                                ? Colors.green
+                                : Colors.black54,
+                            child: Text(voter.serialNumber),
+                          ),
+                          title: Text(
+                            voter.fullName,
+                            style: TextStyle(
+                              fontWeight: voter.hasVoted ? FontWeight.normal : FontWeight.w600,
+                              decoration: voter.hasVoted ? TextDecoration.lineThrough : null,
+                              color: voter.hasVoted ? Colors.grey : null,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Admission No: ${voter.admissionNumber} | Class ${voter.classLevel}-${voter.division}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: _buildStatusWidget(voter, isAuthorized),
+                          onTap: () {
+                            _showVoterDetailsDialog(context, voter, provider);
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ),
+          
+          // If someone is currently voting
+          if (provider.currentlyAuthorizedVoter != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.green.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Authorized: ${provider.currentlyAuthorizedVoter!.fullName} is in the Voting Booth...',
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.green),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => provider.nextVoter(),
+                    child: const Text('Cancel / Next', style: TextStyle(color: Colors.red)),
+                  )
+                ],
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  void _showVoterDetailsDialog(BuildContext context, Voter voter, ElectionProvider provider) {
+    final isConnected = provider.net.isConnected;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.person_outline_rounded, color: Colors.indigo, size: 28),
+              SizedBox(width: 10),
+              Text('Voter Verification', style: TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDetailRow('Full Name', voter.fullName, isBold: true),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildDetailRow('Admission Number', voter.admissionNumber)),
+                  Expanded(child: _buildDetailRow('Serial Number', voter.serialNumber)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: _buildDetailRow('Class', voter.classLevel)),
+                  Expanded(child: _buildDetailRow('Division', voter.division.isEmpty ? 'N/A' : voter.division)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildDetailRow(
+                'Status',
+                voter.hasVoted ? 'Already Voted' : (isConnected ? 'Eligible - Ready to Authorize' : 'Eligible - Connection Required'),
+                valueColor: voter.hasVoted ? Colors.red[600] : (isConnected ? Colors.green[600] : Colors.orange[600]),
+                isBold: true,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            if (!voter.hasVoted)
+              ElevatedButton.icon(
+                onPressed: !isConnected
+                    ? null
+                    : () {
+                        final name = voter.fullName;
+                        provider.authorizeVoterForBooth(voter);
+                        Navigator.pop(ctx);
+                        SemanticsService.announce("Voter $name authorized successfully", TextDirection.ltr);
+                      },
+                icon: const Icon(Icons.how_to_reg_rounded),
+                label: const Text('Authorize to Vote'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isBold = false, Color? valueColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            color: valueColor,
+          ),
+        ),
+      ],
     );
   }
 
