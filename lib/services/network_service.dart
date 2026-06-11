@@ -316,24 +316,33 @@ class NetworkService extends ChangeNotifier {
   void _startUdpBroadcast() async {
     _stopUdpBroadcast();
     if (kIsWeb) return;
-    try {
-      _udpBroadcastSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
-      _udpBroadcastSocket!.broadcastEnabled = true;
-      _udpBroadcastTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
-        if (_serverIp != null) {
-          final data = utf8.encode('SCHOOL_EVM_HOST:$_serverIp:${_schoolName ?? "EVM"}:${_year ?? "2026"}');
+    
+    _udpBroadcastTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (_serverIp != null) {
+        final data = utf8.encode('SCHOOL_EVM_HOST:$_serverIp:${_schoolName ?? "EVM"}:${_year ?? "2026"}');
+        
+        // Split server IPs to broadcast on each interface (Wi-Fi, Hotspot, etc.)
+        final ips = _serverIp!.split(',');
+        for (var ip in ips) {
+          final cleanIp = ip.trim();
+          if (cleanIp.isEmpty) continue;
+          
           try {
-            _udpBroadcastSocket!.send(
+            final address = InternetAddress(cleanIp);
+            final socket = await RawDatagramSocket.bind(address, 0);
+            socket.broadcastEnabled = true;
+            socket.send(
               data,
               InternetAddress('255.255.255.255'),
               _udpPort,
             );
-          } catch (_) {}
+            socket.close();
+          } catch (_) {
+            // Ignore temporary socket bind/send failures on specific interfaces
+          }
         }
-      });
-    } catch (e) {
-      debugPrint('Error starting UDP broadcast: $e');
-    }
+      }
+    });
   }
 
   void _stopUdpBroadcast() {
