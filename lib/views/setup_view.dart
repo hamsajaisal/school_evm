@@ -1,4 +1,6 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/election_provider.dart';
@@ -32,6 +34,27 @@ class _SetupViewState extends State<SetupView> {
   final _csvPasteCtrl = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final provider = Provider.of<ElectionProvider>(context, listen: false);
+        final assigned = provider.db.candidates.map((c) => c.symbolName).toSet();
+        if (assigned.contains(_selectedSymbol)) {
+          for (var sym in ElectionSymbol.availableSymbols) {
+            if (!assigned.contains(sym)) {
+              setState(() {
+                _selectedSymbol = sym;
+              });
+              break;
+            }
+          }
+        }
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _schoolNameCtrl.dispose();
     _yearCtrl.dispose();
@@ -59,10 +82,15 @@ class _SetupViewState extends State<SetupView> {
       body: Stepper(
         type: StepperType.horizontal,
         currentStep: _currentStep,
-        onStepTapped: (step) => setState(() => _currentStep = step),
+        onStepTapped: (step) {
+          setState(() => _currentStep = step);
+          SemanticsService.announce("${step == 0 ? 'Details' : step == 1 ? 'Candidates' : 'Voters'} step selected", TextDirection.ltr);
+        },
         onStepContinue: () {
           if (_currentStep < 2) {
-            setState(() => _currentStep += 1);
+            final nextStep = _currentStep + 1;
+            setState(() => _currentStep = nextStep);
+            SemanticsService.announce("${nextStep == 0 ? 'Details' : nextStep == 1 ? 'Candidates' : 'Voters'} step selected", TextDirection.ltr);
           } else {
             // Setup Complete, launch controller hosting
             _finishSetupAndHost(provider);
@@ -70,7 +98,9 @@ class _SetupViewState extends State<SetupView> {
         },
         onStepCancel: () {
           if (_currentStep > 0) {
-            setState(() => _currentStep -= 1);
+            final prevStep = _currentStep - 1;
+            setState(() => _currentStep = prevStep);
+            SemanticsService.announce("${prevStep == 0 ? 'Details' : prevStep == 1 ? 'Candidates' : 'Voters'} step selected", TextDirection.ltr);
           }
         },
         controlsBuilder: (BuildContext context, ControlsDetails details) {
@@ -117,7 +147,10 @@ class _SetupViewState extends State<SetupView> {
           Step(
             isActive: _currentStep >= 0,
             state: _currentStep > 0 ? StepState.complete : StepState.editing,
-            title: const Text('Details'),
+            title: Semantics(
+              selected: _currentStep == 0,
+              child: const Text('Details'),
+            ),
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -175,6 +208,7 @@ class _SetupViewState extends State<SetupView> {
                       _yearCtrl.text.trim(),
                       _classCtrl.text.trim(),
                     );
+                    SemanticsService.announce("Election details saved successfully", TextDirection.ltr);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Election details saved!')),
                     );
@@ -194,7 +228,10 @@ class _SetupViewState extends State<SetupView> {
           Step(
             isActive: _currentStep >= 1,
             state: _currentStep > 1 ? StepState.complete : StepState.editing,
-            title: const Text('Candidates'),
+            title: Semantics(
+              selected: _currentStep == 1,
+              child: const Text('Candidates'),
+            ),
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -239,17 +276,29 @@ class _SetupViewState extends State<SetupView> {
                 ElevatedButton.icon(
                   onPressed: () async {
                     if (_candNameCtrl.text.isEmpty) return;
+                    final candName = _candNameCtrl.text.trim();
                     await provider.createCandidate(
-                      _candNameCtrl.text.trim(),
+                      candName,
                       _selectedSymbol,
                       null, // optional base64 photo
                     );
                     _candNameCtrl.clear();
+                    SemanticsService.announce("Candidate $candName added successfully with symbol $_selectedSymbol", TextDirection.ltr);
                     setState(() {
-                      // Cycle to next symbol automatically to save clicks
-                      final idx = (ElectionSymbol.availableSymbols.indexOf(_selectedSymbol) + 1) %
-                          ElectionSymbol.availableSymbols.length;
-                      _selectedSymbol = ElectionSymbol.availableSymbols[idx];
+                      final assignedSymbols = provider.db.candidates.map((c) => c.symbolName).toSet();
+                      assignedSymbols.add(_selectedSymbol); // also exclude the one we just added
+                      
+                      String nextSym = _selectedSymbol;
+                      final allSymbols = ElectionSymbol.availableSymbols;
+                      int startIdx = allSymbols.indexOf(_selectedSymbol);
+                      for (int i = 1; i <= allSymbols.length; i++) {
+                        final checkSym = allSymbols[(startIdx + i) % allSymbols.length];
+                        if (!assignedSymbols.contains(checkSym)) {
+                          nextSym = checkSym;
+                          break;
+                        }
+                      }
+                      _selectedSymbol = nextSym;
                     });
                   },
                   icon: const Icon(Icons.add_rounded),
@@ -292,7 +341,10 @@ class _SetupViewState extends State<SetupView> {
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
                               tooltip: 'Delete candidate ${cand.name}',
-                              onPressed: () => provider.deleteCandidate(cand.id),
+                              onPressed: () {
+                                provider.deleteCandidate(cand.id);
+                                SemanticsService.announce("Candidate ${cand.name} deleted successfully", TextDirection.ltr);
+                              },
                             )
                           ],
                         ),
@@ -307,7 +359,10 @@ class _SetupViewState extends State<SetupView> {
           Step(
             isActive: _currentStep >= 2,
             state: _currentStep == 2 ? StepState.editing : StepState.complete,
-            title: const Text('Voters'),
+            title: Semantics(
+              selected: _currentStep == 2,
+              child: const Text('Voters'),
+            ),
             content: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -337,11 +392,11 @@ class _SetupViewState extends State<SetupView> {
                         if (_csvPasteCtrl.text.isEmpty) return;
                         final count = await provider.importVotersFromCSV(_csvPasteCtrl.text);
                         _csvPasteCtrl.clear();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Successfully imported $count voters!')),
-                          );
-                        }
+                        SemanticsService.announce("Successfully imported $count voters from CSV", TextDirection.ltr);
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Successfully imported $count voters!')),
+                        );
                       },
                       icon: const Icon(Icons.file_download_rounded),
                       label: const Text('Parse & Add CSV List'),
@@ -363,21 +418,20 @@ class _SetupViewState extends State<SetupView> {
                             final bytes = file.bytes;
                             if (bytes != null) {
                               final count = await provider.importVotersFromExcel(bytes);
-                              if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Successfully imported $count voters from Excel!')),
-                                );
-                              }
+                              SemanticsService.announce("Successfully imported $count voters from Excel", TextDirection.ltr);
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Successfully imported $count voters from Excel!')),
+                              );
                             } else {
                               throw 'Could not read file bytes.';
                             }
                           }
                         } catch (e) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error importing Excel: $e')),
-                            );
-                          }
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error importing Excel: $e')),
+                          );
                         }
                       },
                       icon: const Icon(Icons.table_chart_rounded),
@@ -438,16 +492,18 @@ class _SetupViewState extends State<SetupView> {
                 ElevatedButton.icon(
                   onPressed: () async {
                     if (_voterAdmCtrl.text.isEmpty || _voterNameCtrl.text.isEmpty) return;
+                    final voterName = _voterNameCtrl.text.trim();
                     await provider.createVoter(
                       _voterSerialCtrl.text.trim(),
                       _voterAdmCtrl.text.trim(),
-                      _voterNameCtrl.text.trim(),
+                      voterName,
                       _classCtrl.text.trim(),
                       _voterDivCtrl.text.trim(),
                     );
                     _voterAdmCtrl.clear();
                     _voterNameCtrl.clear();
                     _voterSerialCtrl.clear();
+                    SemanticsService.announce("Voter $voterName added successfully", TextDirection.ltr);
                   },
                   icon: const Icon(Icons.person_add_rounded),
                   label: const Text('Add Voter'),
@@ -471,6 +527,9 @@ class _SetupViewState extends State<SetupView> {
   }
 
   void _showSymbolGrid(BuildContext context) {
+    final provider = Provider.of<ElectionProvider>(context, listen: false);
+    final assignedSymbols = provider.db.candidates.map((c) => c.symbolName).toSet();
+
     showDialog(
       context: context,
       builder: (ctx) {
@@ -488,26 +547,38 @@ class _SetupViewState extends State<SetupView> {
               itemCount: ElectionSymbol.availableSymbols.length,
               itemBuilder: (context, idx) {
                 final symbol = ElectionSymbol.availableSymbols[idx];
+                final isAssigned = assignedSymbols.contains(symbol);
                 return Semantics(
-                  label: '$symbol symbol. Double tap to select.',
-                  button: true,
+                  label: isAssigned 
+                      ? '$symbol symbol. Already chosen by another candidate.' 
+                      : '$symbol symbol. Double tap to select.',
+                  button: !isAssigned,
+                  enabled: !isAssigned,
                   excludeSemantics: true,
-                  child: InkWell(
-                    onTap: () {
-                      setState(() => _selectedSymbol = symbol);
-                      Navigator.pop(ctx);
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        ElectionSymbol(name: symbol, size: 40),
-                        const SizedBox(height: 4),
-                        Text(
-                          symbol,
-                          style: const TextStyle(fontSize: 10),
-                          overflow: TextOverflow.ellipsis,
-                        )
-                      ],
+                  child: Opacity(
+                    opacity: isAssigned ? 0.35 : 1.0,
+                    child: InkWell(
+                      onTap: isAssigned 
+                          ? null 
+                          : () {
+                              setState(() => _selectedSymbol = symbol);
+                              Navigator.pop(ctx);
+                            },
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElectionSymbol(name: symbol, size: 40),
+                          const SizedBox(height: 4),
+                          Text(
+                            symbol,
+                            style: TextStyle(
+                              fontSize: 10,
+                              decoration: isAssigned ? TextDecoration.lineThrough : null,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        ],
+                      ),
                     ),
                   ),
                 );

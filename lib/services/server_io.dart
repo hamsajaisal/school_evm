@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:shelf/shelf.dart' as shelf;
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_web_socket/shelf_web_socket.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -21,17 +20,21 @@ class BoothServerImpl implements BoothServer {
     _onConnectionChanged = onConnectionChanged;
 
     final handler = webSocketHandler((WebSocketChannel webSocket) {
+      print('SERVER: Client connected (hashCode: ${webSocket.hashCode})');
       _clients.add(webSocket);
       _onConnectionChanged?.call(true);
 
       webSocket.stream.listen((message) {
+        print('SERVER: Received message: $message');
         if (message is String) {
           _onMessageReceived?.call(message);
         }
       }, onDone: () {
+        print('SERVER: Client disconnected (onDone, hashCode: ${webSocket.hashCode})');
         _clients.remove(webSocket);
         _onConnectionChanged?.call(_clients.isNotEmpty);
       }, onError: (err) {
+        print('SERVER: Client error ($err, hashCode: ${webSocket.hashCode})');
         _clients.remove(webSocket);
         _onConnectionChanged?.call(_clients.isNotEmpty);
       });

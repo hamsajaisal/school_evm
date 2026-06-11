@@ -1,4 +1,6 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../services/election_provider.dart';
@@ -320,6 +322,7 @@ class _ControllerViewState extends State<ControllerView> {
                                       ? null // Already voted: disabled
                                       : () {
                                           setState(() => _selectedVoter = voter);
+                                          SemanticsService.announce("Voter ${voter.fullName} selected", TextDirection.ltr);
                                         },
                                 );
                               },
@@ -354,8 +357,10 @@ class _ControllerViewState extends State<ControllerView> {
                             onPressed: !isConnected
                                 ? null // Disable if booth not connected
                                 : () {
+                                    final name = _selectedVoter!.fullName;
                                     provider.authorizeVoterForBooth(_selectedVoter!);
                                     setState(() => _selectedVoter = null);
+                                    SemanticsService.announce("Voter $name authorized successfully", TextDirection.ltr);
                                   },
                             icon: const Icon(Icons.how_to_reg_rounded),
                             label: const Text('Authorize to Vote'),
@@ -466,9 +471,8 @@ class _ControllerViewState extends State<ControllerView> {
               onPressed: () async {
                 Navigator.pop(ctx);
                 await provider.clearAll();
-                if (mounted) {
-                  Navigator.pop(context); // Go back to Role Selection Home
-                }
+                if (!context.mounted) return;
+                Navigator.pop(context); // Go back to Role Selection Home
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text('Reset Everything'),
@@ -497,6 +501,7 @@ class _ControllerViewState extends State<ControllerView> {
               onPressed: () {
                 Navigator.pop(ctx);
                 provider.finishVoting();
+                SemanticsService.announce("Election finished successfully", TextDirection.ltr);
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text('Finish & Freeze'),

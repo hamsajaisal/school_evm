@@ -1,4 +1,6 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 import '../services/election_provider.dart';
 import '../services/network_service.dart';
@@ -13,7 +15,6 @@ class BoothView extends StatefulWidget {
 }
 
 class _BoothViewState extends State<BoothView> {
-  Candidate? _tempSelectedCandidate;
 
   @override
   Widget build(BuildContext context) {
@@ -365,6 +366,7 @@ class _BoothViewState extends State<BoothView> {
               onPressed: () {
                 Navigator.pop(ctx);
                 provider.castVoterBallot(cand.id);
+                SemanticsService.announce("Vote cast successfully", TextDirection.ltr);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.indigo,

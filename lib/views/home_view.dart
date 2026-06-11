@@ -1,4 +1,6 @@
+// ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 import '../services/election_provider.dart';
 import 'setup_view.dart';
@@ -261,7 +263,7 @@ class _HomeViewState extends State<HomeView> {
   void _showConnectDialog(BuildContext context) {
     final provider = Provider.of<ElectionProvider>(context, listen: false);
     
-    String? discoveredIp;
+    final Map<String, String> discoveredHosts = {};
     bool isConnecting = false;
     String? errorMessage;
 
@@ -273,10 +275,12 @@ class _HomeViewState extends State<HomeView> {
           builder: (context, setDialogState) {
             
             // Listen for UDP host broadcasts
-            provider.net.startListeningForHost((ip) {
-              if (discoveredIp != ip) {
+            provider.net.startListeningForHost((ip, schoolName, year) {
+              final label = "$schoolName ($year)";
+              if (discoveredHosts[ip] != label) {
                 setDialogState(() {
-                  discoveredIp = ip;
+                  discoveredHosts[ip] = label;
+                  // Auto-populate manual entry if empty or default
                   if (_ipController.text == '192.168.1.') {
                     _ipController.text = ip;
                   }
@@ -295,59 +299,123 @@ class _HomeViewState extends State<HomeView> {
                   Text('Connect to Controller'),
                 ],
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (discoveredIp != null) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green[400]!),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.check_circle, color: Colors.green[600]),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Auto-Detected Controller at: $discoveredIp',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green[700]),
+              content: SizedBox(
+                width: 450,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (discoveredHosts.isNotEmpty) ...[
+                        const Text(
+                          'Detected Controllers on Wi-Fi:',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
+                        ),
+                        const SizedBox(height: 8),
+                        ...discoveredHosts.entries.map((entry) {
+                          final ip = entry.key;
+                          final label = entry.value;
+                          return Semantics(
+                            button: true,
+                            label: 'Connect to $label, IP address $ip',
+                            child: Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              elevation: 1,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: BorderSide(color: Colors.indigo.withOpacity(0.15)),
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(10),
+                                onTap: isConnecting
+                                    ? null
+                                    : () async {
+                                        setDialogState(() {
+                                          isConnecting = true;
+                                          errorMessage = null;
+                                        });
+                                        SemanticsService.announce('Connecting to $label Controller...', TextDirection.ltr);
+                                        try {
+                                          provider.net.stopListeningForHost();
+                                          await provider.startAsBoothClient(ip, 8080);
+                                          
+                                          if (ctx.mounted) {
+                                            Navigator.pop(ctx);
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (_) => const BoothView()),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          // Restart UDP listening on failure
+                                          provider.net.startListeningForHost((ip, name, yr) {
+                                            final lbl = "$name ($yr)";
+                                            if (discoveredHosts[ip] != lbl) {
+                                              setDialogState(() {
+                                                discoveredHosts[ip] = lbl;
+                                              });
+                                            }
+                                          });
+                                          
+                                          setDialogState(() {
+                                            isConnecting = false;
+                                            errorMessage = 'Connection failed. Check IP & Controller status.';
+                                          });
+                                        }
+                                      },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.wifi_tethering_rounded, color: Colors.green),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                            Text('IP: $ip', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
+                          );
+                        }),
+                        const SizedBox(height: 16),
+                      ],
+                      const Text(
+                        'Or enter the IP Address manually:',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _ipController,
+                        enabled: !isConnecting,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: InputDecoration(
+                          hintText: 'e.g. 192.168.1.5',
+                          labelText: 'Controller IP Address',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        ],
+                          prefixIcon: const Icon(Icons.network_wifi_rounded),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  const Text(
-                    'Enter the IP Address displayed on the Teacher\'s Controller screen:',
-                    style: TextStyle(fontSize: 14),
+                      if (errorMessage != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          errorMessage!,
+                          style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _ipController,
-                    enabled: !isConnecting,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      hintText: 'e.g. 192.168.1.5',
-                      labelText: 'Controller IP Address',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      prefixIcon: const Icon(Icons.network_wifi_rounded),
-                    ),
-                  ),
-                  if (errorMessage != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      errorMessage!,
-                      style: const TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -382,10 +450,11 @@ class _HomeViewState extends State<HomeView> {
                             }
                           } catch (e) {
                             // Restart UDP listening on failure
-                            provider.net.startListeningForHost((ip) {
-                              if (discoveredIp != ip) {
+                            provider.net.startListeningForHost((ip, name, yr) {
+                              final lbl = "$name ($yr)";
+                              if (discoveredHosts[ip] != lbl) {
                                 setDialogState(() {
-                                  discoveredIp = ip;
+                                  discoveredHosts[ip] = lbl;
                                 });
                               }
                             });

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:excel/excel.dart';
+import 'package:spreadsheet_decoder/spreadsheet_decoder.dart';
 import '../models/candidate.dart';
 import '../models/voter.dart';
 import '../models/election_settings.dart';
@@ -167,12 +167,12 @@ class ElectionProvider extends ChangeNotifier {
 
   // Bulk Import Voters from Excel (.xlsx) bytes
   Future<int> importVotersFromExcel(List<int> bytes) async {
-    final excel = Excel.decodeBytes(bytes);
+    final decoder = SpreadsheetDecoder.decodeBytes(bytes);
     final List<Voter> imported = [];
     int successCount = 0;
 
-    for (var table in excel.tables.keys) {
-      final sheet = excel.tables[table];
+    for (var table in decoder.tables.keys) {
+      final sheet = decoder.tables[table];
       if (sheet == null || sheet.maxRows == 0) continue;
 
       // Check if first row contains header strings
@@ -180,7 +180,7 @@ class ElectionProvider extends ChangeNotifier {
       if (sheet.maxRows > 0) {
         final firstRow = sheet.rows[0];
         for (var cell in firstRow) {
-          final valStr = cell?.value?.toString().toLowerCase() ?? '';
+          final valStr = cell?.toString().toLowerCase() ?? '';
           if (valStr.contains('name') || valStr.contains('admission') || valStr.contains('serial') || valStr.contains('adm')) {
             hasHeader = true;
             break;
@@ -194,11 +194,11 @@ class ElectionProvider extends ChangeNotifier {
         if (row.isEmpty) continue;
 
         // Extract: Serial, AdmissionNo, Name, [Class], [Division]
-        final serial = row.isNotEmpty ? row[0]?.value?.toString().trim() ?? '' : '';
-        final admNo = row.length > 1 ? row[1]?.value?.toString().trim() ?? '' : '';
-        final name = row.length > 2 ? row[2]?.value?.toString().trim() ?? '' : '';
-        final classLvl = row.length > 3 ? row[3]?.value?.toString().trim() ?? '' : (db.settings?.targetClass ?? '');
-        final div = row.length > 4 ? row[4]?.value?.toString().trim() ?? '' : '';
+        final serial = row.isNotEmpty ? row[0]?.toString().trim() ?? '' : '';
+        final admNo = row.length > 1 ? row[1]?.toString().trim() ?? '' : '';
+        final name = row.length > 2 ? row[2]?.toString().trim() ?? '' : '';
+        final classLvl = row.length > 3 ? row[3]?.toString().trim() ?? '' : (db.settings?.targetClass ?? '');
+        final div = row.length > 4 ? row[4]?.toString().trim() ?? '' : '';
 
         if (admNo.isNotEmpty && name.isNotEmpty) {
           imported.add(Voter(
@@ -233,8 +233,12 @@ class ElectionProvider extends ChangeNotifier {
 
   // Start Hosting Server on Controller (Teacher Phone)
   Future<void> startAsControllerHost(int port) async {
+    final schoolName = db.settings?.schoolName ?? 'EVM Host';
+    final year = db.settings?.year ?? '2026';
     await net.startHosting(
       port,
+      schoolName,
+      year,
       (candidateId) async {
         await db.castVote(candidateId);
       },

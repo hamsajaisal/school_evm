@@ -1,8 +1,11 @@
+// ignore_for_file: deprecated_member_use
 import 'dart:convert';
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 import 'server_factory.dart';
 import 'server_interface.dart';
 import '../models/voter.dart';
@@ -21,6 +24,8 @@ class NetworkService extends ChangeNotifier {
   BoothServer? _server;
   String? _serverIp;
   String? get serverIp => _serverIp;
+  String? _schoolName;
+  String? _year;
 
   // Client (Used by Client device connecting to Host)
   WebSocketChannel? _channel;
@@ -39,12 +44,16 @@ class NetworkService extends ChangeNotifier {
   // Host/Server Mode (E.g. Controller phone hosting)
   Future<void> startHosting(
     int port,
+    String schoolName,
+    String year,
     Function(String candidateId) onVoteReceived,
     Function(String admissionNumber) onVoteCastNotification,
   ) async {
     if (kIsWeb) return; // Web cannot host a server
     await stop();
 
+    _schoolName = schoolName;
+    _year = year;
     _role = NetworkRole.host;
     this.onVoteReceived = onVoteReceived;
     this.onVoteCastNotification = onVoteCastNotification;
@@ -56,6 +65,9 @@ class NetworkService extends ChangeNotifier {
       (connected) {
         _isConnected = connected;
         notifyListeners();
+        if (!connected) {
+          SemanticsService.announce("Voting booth disconnected", TextDirection.ltr);
+        }
       },
     );
 
@@ -76,7 +88,12 @@ class NetworkService extends ChangeNotifier {
 
     final uri = Uri.parse('ws://$ipAddress:$port');
     try {
-      final channel = WebSocketChannel.connect(uri);
+      final WebSocketChannel channel;
+      if (kIsWeb) {
+        channel = WebSocketChannel.connect(uri);
+      } else {
+        channel = IOWebSocketChannel.connect(uri, pingInterval: const Duration(seconds: 5));
+      }
       // Wait for handshake connection to succeed (up to 5 seconds)
       await channel.ready.timeout(const Duration(seconds: 5));
       
@@ -84,6 +101,13 @@ class NetworkService extends ChangeNotifier {
       _isConnected = true;
       _boothState = BoothState.locked;
       notifyListeners();
+
+      // Announce connection on client
+      SemanticsService.announce("Connected to controller successfully", TextDirection.ltr);
+
+      // Send CLIENT_CONNECTED handshake to server
+      final handshake = {'action': 'CLIENT_CONNECTED'};
+      _channel!.sink.add(jsonEncode(handshake));
 
       _channel!.stream.listen(
         (message) {
@@ -95,11 +119,13 @@ class NetworkService extends ChangeNotifier {
           _isConnected = false;
           _role = NetworkRole.none;
           notifyListeners();
+          SemanticsService.announce("Disconnected from controller", TextDirection.ltr);
         },
         onError: (err) {
           _isConnected = false;
           _role = NetworkRole.none;
           notifyListeners();
+          SemanticsService.announce("Disconnected from controller due to error", TextDirection.ltr);
         },
       );
     } catch (e) {
@@ -189,11 +215,21 @@ class NetworkService extends ChangeNotifier {
       final action = packet['action'] as String;
 
       switch (action) {
+        case 'CLIENT_CONNECTED':
+          if (_role == NetworkRole.host) {
+            print('HOST: Client handshaked successfully.');
+            _isConnected = true;
+            notifyListeners();
+            SemanticsService.announce("Voting booth connected successfully", TextDirection.ltr);
+          }
+          break;
+
         case 'AUTHORIZE_VOTER':
           if (_role == NetworkRole.client) {
             _activeVoter = Voter.fromMap(packet['voter']);
             _boothState = BoothState.activeVoting;
             notifyListeners();
+            SemanticsService.announce("Voting booth unlocked for ${_activeVoter?.fullName ?? 'voter'}", TextDirection.ltr);
           }
           break;
 
@@ -252,7 +288,7 @@ class NetworkService extends ChangeNotifier {
       _udpBroadcastSocket!.broadcastEnabled = true;
       _udpBroadcastTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
         if (_serverIp != null) {
-          final data = utf8.encode('SCHOOL_EVM_HOST:$_serverIp');
+          final data = utf8.encode('SCHOOL_EVM_HOST:$_serverIp:${_schoolName ?? "EVM"}:${_year ?? "2026"}');
           try {
             _udpBroadcastSocket!.send(
               data,
@@ -275,7 +311,7 @@ class NetworkService extends ChangeNotifier {
   }
 
   // Client: Start listening for Host discovery
-  void startListeningForHost(Function(String hostIp) onHostFound) async {
+  void startListeningForHost(Function(String hostIp, String schoolName, String year) onHostFound) async {
     stopListeningForHost();
     if (kIsWeb) return;
     try {
@@ -286,8 +322,13 @@ class NetworkService extends ChangeNotifier {
           if (datagram != null) {
             final message = utf8.decode(datagram.data);
             if (message.startsWith('SCHOOL_EVM_HOST:')) {
-              final ip = message.substring('SCHOOL_EVM_HOST:'.length);
-              onHostFound(ip);
+              final parts = message.substring('SCHOOL_EVM_HOST:'.length).split(':');
+              if (parts.length >= 3) {
+                final ip = parts[0];
+                final name = parts[1];
+                final yr = parts[2];
+                onHostFound(ip, name, yr);
+              }
             }
           }
         }
