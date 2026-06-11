@@ -196,20 +196,20 @@ class _BoothViewState extends State<BoothView> {
     bool isDark,
   ) {
     final isVoted = _votedCandidateId == cand.id;
-    return Semantics(
-      label: 'Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}. ${isVoted ? "Voting..." : "Press Enter or double-tap to vote."}',
-      button: true,
-      excludeSemantics: true,
-      child: ElevatedButton(
-        onPressed: _isShowingGlow ? null : () => _confirmVote(context, provider, cand),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: isDark ? const Color(0xFF1F1F35) : Colors.white,
-          foregroundColor: isDark ? Colors.white : Colors.black87,
-          elevation: 2,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          shadowColor: isDark ? Colors.transparent : Colors.black26,
-        ),
+    return ElevatedButton(
+      onPressed: _isShowingGlow ? null : () => _confirmVote(context, provider, cand),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isDark ? const Color(0xFF1F1F35) : Colors.white,
+        foregroundColor: isDark ? Colors.white : Colors.black87,
+        elevation: 2,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shadowColor: isDark ? Colors.transparent : Colors.black26,
+      ),
+      child: Semantics(
+        label: 'Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}. ${isVoted ? "Voting..." : "Press Enter or double-tap to vote."}',
+        button: true,
+        excludeSemantics: true,
         child: Row(
           children: [
             // Serial Number Key Button
