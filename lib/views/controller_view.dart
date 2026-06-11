@@ -23,6 +23,7 @@ class _ControllerViewState extends State<ControllerView> {
   final FocusNode _searchFocusNode = FocusNode();
   final FocusNode _actionFocusNode = FocusNode();
   final FocusNode _keyboardFocusNode = FocusNode();
+  bool? _lastConnected;
 
   @override
   void initState() {
@@ -64,6 +65,16 @@ class _ControllerViewState extends State<ControllerView> {
     // Connection info
     final ipAddress = provider.net.serverIp ?? 'Retrieving IP...';
     final isConnected = provider.net.isConnected;
+
+    if (_lastConnected != null && _lastConnected != isConnected) {
+      final message = isConnected
+          ? "Voting booth connected!"
+          : "Voting booth disconnected. Waiting for booth to connect...";
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        SemanticsService.announce(message, TextDirection.ltr);
+      });
+    }
+    _lastConnected = isConnected;
 
     final isMobile = MediaQuery.of(context).size.width < 700;
 
@@ -212,69 +223,73 @@ class _ControllerViewState extends State<ControllerView> {
             const SizedBox(height: 12),
             
             // Connection Status Card
-            Card(
-              elevation: 0,
-              color: isConnected ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: isConnected ? Colors.green : Colors.orange,
-                  width: 1,
-                ),
+            _AccessibleFocusableCard(
+              semanticLabel: isConnected
+                  ? 'Booth Pairing Status: Voting Booth Connected!'
+                  : 'Booth Pairing Status: Waiting for Booth to Connect...',
+              backgroundColor: isConnected ? Colors.green.withOpacity(0.12) : Colors.orange.withOpacity(0.12),
+              baseBorderSide: BorderSide(
+                color: isConnected ? Colors.green : Colors.orange,
+                width: 1,
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(
-                      isConnected ? Icons.check_circle : Icons.warning_rounded,
-                      color: isConnected ? Colors.green : Colors.orange,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        isConnected
-                            ? 'Voting Booth Connected!'
-                            : 'Waiting for Booth to Connect...',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isConnected ? Colors.green[800] : Colors.orange[800],
-                        ),
+              child: Row(
+                children: [
+                  Icon(
+                    isConnected ? Icons.check_circle : Icons.warning_rounded,
+                    color: isConnected ? Colors.green : Colors.orange,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isConnected
+                          ? 'Voting Booth Connected!'
+                          : 'Waiting for Booth to Connect...',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isConnected ? Colors.green[800] : Colors.orange[800],
                       ),
-                    )
-                  ],
-                ),
+                    ),
+                  )
+                ],
               ),
             ),
             const SizedBox(height: 16),
 
             // Host IP Card & QR Code
-            Center(
-              child: Column(
-                children: [
-                  Text('IP Address: $ipAddress', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
-                  const SizedBox(height: 8),
-                  if (provider.net.serverIp != null)
-                    QrImageView(
-                      data: provider.net.serverIp!,
-                      version: QrVersions.auto,
-                      size: 160.0,
-                      eyeStyle: QrEyeStyle(
-                        eyeShape: QrEyeShape.square,
-                        color: isDark ? Colors.white : Colors.indigo,
+            _AccessibleFocusableCard(
+              semanticLabel: provider.net.serverIp != null
+                  ? 'IP Address details: IP Address is $ipAddress. Scan this QR code from the student\'s Voting Booth device to link them instantly.'
+                  : 'IP Address details: Retrieving IP address... Scan the QR code on the voting booth device to link them instantly.',
+              backgroundColor: isDark ? const Color(0xFF242436) : Colors.indigo.withOpacity(0.05),
+              baseBorderSide: BorderSide(color: Colors.grey.withOpacity(0.2), width: 1),
+              padding: const EdgeInsets.all(16),
+              child: Center(
+                child: Column(
+                  children: [
+                    Text('IP Address: $ipAddress', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    if (provider.net.serverIp != null)
+                      QrImageView(
+                        data: provider.net.serverIp!,
+                        version: QrVersions.auto,
+                        size: 160.0,
+                        eyeStyle: QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: isDark ? Colors.white : Colors.indigo,
+                        ),
+                        dataModuleStyle: QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: isDark ? Colors.white : Colors.indigo,
+                        ),
                       ),
-                      dataModuleStyle: QrDataModuleStyle(
-                        dataModuleShape: QrDataModuleShape.square,
-                        color: isDark ? Colors.white : Colors.indigo,
-                      ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Scan this QR code from the student\'s Voting Booth device to link them instantly.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
                     ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Scan this QR code from the student\'s Voting Booth device to link them instantly.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             
@@ -283,22 +298,33 @@ class _ControllerViewState extends State<ControllerView> {
             const SizedBox(height: 12),
 
             // Stats Dashboard
-            const Text('Turnout Stats', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: totalVoters > 0 ? (votedCount / totalVoters) : 0,
-              backgroundColor: Colors.grey[300],
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.indigo),
-              minHeight: 12,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('$votedCount / $totalVoters Voted'),
-                Text('${turnoutPct.toStringAsFixed(1)}% Turnout'),
-              ],
+            _AccessibleFocusableCard(
+              semanticLabel: 'Turnout Stats: $votedCount of $totalVoters Voted, ${turnoutPct.toStringAsFixed(1)}% Turnout.',
+              backgroundColor: isDark ? const Color(0xFF242436) : Colors.indigo.withOpacity(0.05),
+              baseBorderSide: BorderSide(color: Colors.grey.withOpacity(0.2), width: 1),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Turnout Stats', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value: totalVoters > 0 ? (votedCount / totalVoters) : 0,
+                    backgroundColor: Colors.grey[300],
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.indigo),
+                    minHeight: 12,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('$votedCount / $totalVoters Voted'),
+                      Text('${turnoutPct.toStringAsFixed(1)}% Turnout'),
+                    ],
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
             const Divider(),
@@ -366,7 +392,23 @@ class _ControllerViewState extends State<ControllerView> {
           TextField(
             focusNode: _searchFocusNode,
             controller: _searchCtrl,
-            onChanged: (val) => setState(() => _searchQuery = val),
+            onChanged: (val) {
+              setState(() => _searchQuery = val);
+              final query = val.toLowerCase().trim();
+              if (query.isEmpty) {
+                SemanticsService.announce("Search cleared, showing all ${provider.db.voters.length} voters", TextDirection.ltr);
+                return;
+              }
+              final count = provider.db.voters.where((v) {
+                return v.fullName.toLowerCase().contains(query) ||
+                       v.admissionNumber.toLowerCase().contains(query) ||
+                       v.serialNumber.contains(query);
+              }).length;
+              final message = count == 1 
+                  ? "1 result found" 
+                  : "$count results found";
+              SemanticsService.announce(message, TextDirection.ltr);
+            },
             decoration: InputDecoration(
               hintText: 'Search by Name, Admission Number, or Serial...',
               prefixIcon: const Icon(Icons.search),
@@ -377,6 +419,7 @@ class _ControllerViewState extends State<ControllerView> {
                       onPressed: () {
                         _searchCtrl.clear();
                         setState(() => _searchQuery = '');
+                        SemanticsService.announce("Search cleared, showing all ${provider.db.voters.length} voters", TextDirection.ltr);
                       },
                     )
                   : null,
@@ -396,7 +439,7 @@ class _ControllerViewState extends State<ControllerView> {
                   ? const Center(child: Text('No matching voters found.'))
                   : ListView.separated(
                       itemCount: filteredVoters.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (ctx, idx) => const Divider(height: 1),
                       itemBuilder: (ctx, idx) {
                         final voter = filteredVoters[idx];
                         final isAuthorized = provider.currentlyAuthorizedVoter?.admissionNumber == voter.admissionNumber;
@@ -657,6 +700,53 @@ class _ControllerViewState extends State<ControllerView> {
           ],
         );
       },
+    );
+  }
+}
+
+class _AccessibleFocusableCard extends StatelessWidget {
+  final Widget child;
+  final String semanticLabel;
+  final Color? backgroundColor;
+  final BorderSide baseBorderSide;
+  final EdgeInsetsGeometry padding;
+
+  const _AccessibleFocusableCard({
+    required this.child,
+    required this.semanticLabel,
+    this.backgroundColor,
+    this.baseBorderSide = BorderSide.none,
+    this.padding = const EdgeInsets.all(12),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      child: Builder(
+        builder: (context) {
+          final isFocused = Focus.of(context).hasFocus;
+          return Semantics(
+            container: true,
+            label: semanticLabel,
+            focused: isFocused,
+            child: Card(
+              elevation: 0,
+              margin: EdgeInsets.zero,
+              color: backgroundColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: isFocused
+                    ? const BorderSide(color: Colors.indigoAccent, width: 2.5)
+                    : baseBorderSide,
+              ),
+              child: Padding(
+                padding: padding,
+                child: child,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
