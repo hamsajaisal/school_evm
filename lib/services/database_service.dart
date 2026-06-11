@@ -27,15 +27,33 @@ class DatabaseService extends ChangeNotifier {
 
   Future<void> init() async {
     if (_isInitialized) return;
-    await Hive.initFlutter();
-    
-    await Hive.openBox(_settingsBoxName);
-    await Hive.openBox(_candidatesBoxName);
-    await Hive.openBox(_votersBoxName);
-    await Hive.openBox(_votesBoxName);
+    try {
+      await Hive.initFlutter('SchoolEVM');
+      
+      await _openBoxWithRetry(_settingsBoxName);
+      await _openBoxWithRetry(_candidatesBoxName);
+      await _openBoxWithRetry(_votersBoxName);
+      await _openBoxWithRetry(_votesBoxName);
 
-    _isInitialized = true;
-    _loadData();
+      _isInitialized = true;
+      _loadData();
+    } catch (e) {
+      debugPrint("DATABASE INIT FATAL ERROR: $e");
+    }
+  }
+
+  Future<Box> _openBoxWithRetry(String boxName) async {
+    try {
+      return await Hive.openBox(boxName);
+    } catch (e) {
+      debugPrint("Failed to open Hive box $boxName, attempting recovery: $e");
+      try {
+        await Hive.deleteBoxFromDisk(boxName);
+      } catch (err) {
+        debugPrint("Could not delete box $boxName from disk: $err");
+      }
+      return await Hive.openBox(boxName);
+    }
   }
 
   void reloadData() {

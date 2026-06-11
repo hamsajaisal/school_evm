@@ -54,6 +54,11 @@ class _LiveCountViewState extends State<LiveCountView> {
     _lastDrawnCandidateName = null;
     _lastDrawnSymbolName = null;
     setState(() {});
+
+    SemanticsService.announce(
+      "Live Election Tally Board loaded. ${provider.db.anonymousVotes.length} ballots ready to be counted. Press Tab to focus the Ballot Box to begin.",
+      TextDirection.ltr,
+    );
   }
 
   @override
@@ -193,16 +198,20 @@ class _LiveCountViewState extends State<LiveCountView> {
           )
         ],
       ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: isDark
-                ? [const Color(0xFF1E1E2F), const Color(0xFF11111E)]
-                : [const Color(0xFFF4F6F9), const Color(0xFFE3E7ED)],
+      body: Semantics(
+        focused: true,
+        container: true,
+        label: "Live Election Tally Board loaded. ${provider.db.anonymousVotes.length} ballots ready to be counted. Press Tab to focus the Ballot Box to begin.",
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: isDark
+                  ? [const Color(0xFF1E1E2F), const Color(0xFF11111E)]
+                  : [const Color(0xFFF4F6F9), const Color(0xFFE3E7ED)],
+            ),
           ),
-        ),
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
@@ -348,74 +357,80 @@ class _LiveCountViewState extends State<LiveCountView> {
                                     final drawnTotal = _currentIndex == 0 ? 1 : _currentIndex;
                                     final pct = score / drawnTotal;
 
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 12.0),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    return Focus(
+                                      child: Semantics(
+                                        label: "Candidate ${cand.serialNumber}: ${cand.name}. Symbol: ${cand.symbolName}. $score votes.",
+                                        excludeSemantics: true,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 12.0),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
                                               Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                 children: [
-                                                  CircleAvatar(
-                                                    radius: 14,
-                                                    backgroundColor: Colors.indigo.withOpacity(0.1),
-                                                    child: Text(
-                                                      cand.serialNumber.toString(),
-                                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 8),
-                                                  Text(cand.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                                ],
-                                              ),
-                                              Row(
-                                                children: [
-                                                  ElectionSymbol(name: cand.symbolName, size: 28),
-                                                  const SizedBox(width: 12),
-                                                  Text(
-                                                    '$score votes',
-                                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          // Animated growth bar
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Stack(
-                                                  children: [
-                                                    // Track background
-                                                    Container(
-                                                      height: 16,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.grey[200],
-                                                        borderRadius: BorderRadius.circular(8),
-                                                      ),
-                                                    ),
-                                                    // Tally growth
-                                                    AnimatedContainer(
-                                                      duration: const Duration(milliseconds: 300),
-                                                      curve: Curves.easeOutCubic,
-                                                      width: MediaQuery.of(context).size.width * 0.3 * pct,
-                                                      height: 16,
-                                                      decoration: BoxDecoration(
-                                                        gradient: const LinearGradient(
-                                                          colors: [Colors.indigoAccent, Colors.indigo],
+                                                  Row(
+                                                    children: [
+                                                      CircleAvatar(
+                                                        radius: 14,
+                                                        backgroundColor: Colors.indigo.withOpacity(0.1),
+                                                        child: Text(
+                                                          cand.serialNumber.toString(),
+                                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                                                         ),
-                                                        borderRadius: BorderRadius.circular(8),
                                                       ),
+                                                      const SizedBox(width: 8),
+                                                      Text(cand.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                                    ],
+                                                  ),
+                                                  Row(
+                                                    children: [
+                                                      ElectionSymbol(name: cand.symbolName, size: 28),
+                                                      const SizedBox(width: 12),
+                                                      Text(
+                                                        '$score votes',
+                                                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              // Animated growth bar
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Stack(
+                                                      children: [
+                                                        // Track background
+                                                        Container(
+                                                          height: 16,
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.grey[200],
+                                                            borderRadius: BorderRadius.circular(8),
+                                                          ),
+                                                        ),
+                                                        // Tally growth
+                                                        AnimatedContainer(
+                                                          duration: const Duration(milliseconds: 300),
+                                                          curve: Curves.easeOutCubic,
+                                                          width: MediaQuery.of(context).size.width * 0.3 * pct,
+                                                          height: 16,
+                                                          decoration: BoxDecoration(
+                                                            gradient: const LinearGradient(
+                                                              colors: [Colors.indigoAccent, Colors.indigo],
+                                                            ),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ],
-                                                ),
+                                                  ),
+                                                ],
                                               ),
                                             ],
                                           ),
-                                        ],
+                                        ),
                                       ),
                                     );
                                   },
@@ -433,8 +448,9 @@ class _LiveCountViewState extends State<LiveCountView> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildStatusBar(
     BuildContext context,

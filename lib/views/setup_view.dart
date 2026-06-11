@@ -255,17 +255,22 @@ class _SetupViewState extends State<SetupView> {
                     const SizedBox(width: 16),
                     // Symbol Picker button
                     Expanded(
-                      child: Semantics(
-                        label: 'Symbol picker. Current selected symbol is $_selectedSymbol.',
-                        button: true,
-                        onTap: () => _showSymbolGrid(context),
-                        excludeSemantics: true,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _showSymbolGrid(context),
-                          icon: ElectionSymbol(name: _selectedSymbol, size: 28),
-                          label: Text(_selectedSymbol),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      child: OutlinedButton(
+                        onPressed: () => _showSymbolGrid(context),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                        ),
+                        child: Semantics(
+                          label: 'Symbol picker. Current selected symbol is $_selectedSymbol. Press Enter to change.',
+                          button: true,
+                          excludeSemantics: true,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ElectionSymbol(name: _selectedSymbol, size: 28),
+                              const SizedBox(width: 8),
+                              Text(_selectedSymbol),
+                            ],
                           ),
                         ),
                       ),
@@ -548,22 +553,22 @@ class _SetupViewState extends State<SetupView> {
               itemBuilder: (context, idx) {
                 final symbol = ElectionSymbol.availableSymbols[idx];
                 final isAssigned = assignedSymbols.contains(symbol);
-                return Semantics(
-                  label: isAssigned 
-                      ? '$symbol symbol. Already chosen by another candidate.' 
-                      : '$symbol symbol. Double tap to select.',
-                  button: !isAssigned,
-                  enabled: !isAssigned,
-                  excludeSemantics: true,
-                  child: Opacity(
-                    opacity: isAssigned ? 0.35 : 1.0,
-                    child: InkWell(
-                      onTap: isAssigned 
-                          ? null 
-                          : () {
-                              setState(() => _selectedSymbol = symbol);
-                              Navigator.pop(ctx);
-                            },
+                return Opacity(
+                  opacity: isAssigned ? 0.35 : 1.0,
+                  child: InkWell(
+                    onTap: isAssigned 
+                        ? null 
+                        : () {
+                            setState(() => _selectedSymbol = symbol);
+                            Navigator.pop(ctx);
+                          },
+                    child: Semantics(
+                      label: isAssigned 
+                          ? '$symbol symbol. Already chosen by another candidate.' 
+                          : '$symbol symbol. Press Enter to select.',
+                      button: !isAssigned,
+                      enabled: !isAssigned,
+                      excludeSemantics: true,
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:flutter/services.dart';
 import '../services/election_provider.dart';
 import '../services/pdf_service.dart';
 import '../models/voter.dart';
@@ -19,6 +20,9 @@ class ControllerView extends StatefulWidget {
 class _ControllerViewState extends State<ControllerView> {
   String _searchQuery = '';
   final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _actionFocusNode = FocusNode();
+  final FocusNode _keyboardFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -33,6 +37,9 @@ class _ControllerViewState extends State<ControllerView> {
   @override
   void dispose() {
     _searchCtrl.dispose();
+    _searchFocusNode.dispose();
+    _actionFocusNode.dispose();
+    _keyboardFocusNode.dispose();
     super.dispose();
   }
 
@@ -78,87 +85,108 @@ class _ControllerViewState extends State<ControllerView> {
       isDark,
     );
 
-    if (isMobile) {
-      return DefaultTabController(
-        length: 2,
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Election Controller Desk'),
-            backgroundColor: Colors.indigo,
-            foregroundColor: Colors.white,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf_rounded),
-                tooltip: 'Print Voter Slips',
-                onPressed: () {
-                  if (provider.db.settings != null && provider.db.voters.isNotEmpty) {
-                    PdfService.generateAndPrintVoterSlips(provider.db.voters, provider.db.settings!);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Setup incomplete or no voters found.')),
-                    );
-                  }
-                },
+    final widgetTree = isMobile
+        ? DefaultTabController(
+            length: 2,
+            child: Scaffold(
+              appBar: AppBar(
+                title: const Text('Election Controller Desk'),
+                backgroundColor: Colors.indigo,
+                foregroundColor: Colors.white,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.picture_as_pdf_rounded),
+                    tooltip: 'Print Voter Slips',
+                    onPressed: () {
+                      if (provider.db.settings != null && provider.db.voters.isNotEmpty) {
+                        PdfService.generateAndPrintVoterSlips(provider.db.voters, provider.db.settings!);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Setup incomplete or no voters found.')),
+                        );
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded),
+                    tooltip: 'Reset Election',
+                    onPressed: () => _confirmReset(context, provider),
+                  ),
+                ],
+                bottom: const TabBar(
+                  indicatorColor: Colors.white,
+                  labelColor: Colors.white,
+                  unselectedLabelColor: Colors.white70,
+                  tabs: [
+                    Tab(icon: Icon(Icons.people_rounded), text: 'Voters List'),
+                    Tab(icon: Icon(Icons.wifi_tethering_rounded), text: 'Pairing & Stats'),
+                  ],
+                ),
               ),
-              IconButton(
-                icon: const Icon(Icons.refresh_rounded),
-                tooltip: 'Reset Election',
-                onPressed: () => _confirmReset(context, provider),
+              body: TabBarView(
+                children: [
+                  rightPanel,
+                  leftPanel,
+                ],
               ),
-            ],
-            bottom: const TabBar(
-              indicatorColor: Colors.white,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white70,
-              tabs: [
-                Tab(icon: Icon(Icons.people_rounded), text: 'Voters List'),
-                Tab(icon: Icon(Icons.wifi_tethering_rounded), text: 'Pairing & Stats'),
+            ),
+          )
+        : Scaffold(
+            appBar: AppBar(
+              title: const Text('Election Controller Desk'),
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.picture_as_pdf_rounded),
+                  tooltip: 'Print Voter Slips',
+                  onPressed: () {
+                    if (provider.db.settings != null && provider.db.voters.isNotEmpty) {
+                      PdfService.generateAndPrintVoterSlips(provider.db.voters, provider.db.settings!);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Setup incomplete or no voters found.')),
+                      );
+                    }
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh_rounded),
+                  tooltip: 'Reset Election',
+                  onPressed: () => _confirmReset(context, provider),
+                ),
               ],
             ),
-          ),
-          body: TabBarView(
-            children: [
-              rightPanel,
-              leftPanel,
-            ],
-          ),
-        ),
-      );
-    }
+            body: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(flex: 2, child: leftPanel),
+                Expanded(flex: 3, child: rightPanel),
+              ],
+            ),
+          );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Election Controller Desk'),
-        backgroundColor: Colors.indigo,
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_rounded),
-            tooltip: 'Print Voter Slips',
-            onPressed: () {
-              if (provider.db.settings != null && provider.db.voters.isNotEmpty) {
-                PdfService.generateAndPrintVoterSlips(provider.db.voters, provider.db.settings!);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Setup incomplete or no voters found.')),
-                );
-              }
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Reset Election',
-            onPressed: () => _confirmReset(context, provider),
-          ),
-        ],
-      ),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(flex: 2, child: leftPanel),
-          Expanded(flex: 3, child: rightPanel),
-        ],
-      ),
+    return KeyboardListener(
+      focusNode: _keyboardFocusNode,
+      autofocus: true,
+      onKeyEvent: (event) {
+        if (event is KeyDownEvent) {
+          final isCtrl = event.logicalKey == LogicalKeyboardKey.controlLeft ||
+                         event.logicalKey == LogicalKeyboardKey.controlRight ||
+                         HardwareKeyboard.instance.isControlPressed;
+          
+          if (isCtrl) {
+            if (event.logicalKey == LogicalKeyboardKey.keyF) {
+              _searchFocusNode.requestFocus();
+              SemanticsService.announce("Search bar focused", TextDirection.ltr);
+            } else if (event.logicalKey == LogicalKeyboardKey.keyE) {
+              _actionFocusNode.requestFocus();
+              SemanticsService.announce("Action button focused", TextDirection.ltr);
+            }
+          }
+        }
+      },
+      child: widgetTree,
     );
   }
 
@@ -281,6 +309,7 @@ class _ControllerViewState extends State<ControllerView> {
             const SizedBox(height: 12),
             if (provider.db.settings?.isElectionFinished ?? false) ...[
               ElevatedButton.icon(
+                focusNode: _actionFocusNode,
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -298,6 +327,7 @@ class _ControllerViewState extends State<ControllerView> {
               ),
             ] else ...[
               ElevatedButton.icon(
+                focusNode: _actionFocusNode,
                 onPressed: () => _confirmFinish(context, provider),
                 icon: const Icon(Icons.lock_clock_rounded),
                 label: const Text('Finish Voting & End Election'),
@@ -334,6 +364,7 @@ class _ControllerViewState extends State<ControllerView> {
           
           // Search Bar
           TextField(
+            focusNode: _searchFocusNode,
             controller: _searchCtrl,
             onChanged: (val) => setState(() => _searchQuery = val),
             decoration: InputDecoration(
@@ -393,9 +424,11 @@ class _ControllerViewState extends State<ControllerView> {
                             style: const TextStyle(fontSize: 12),
                           ),
                           trailing: _buildStatusWidget(voter, isAuthorized),
-                          onTap: () {
-                            _showVoterDetailsDialog(context, voter, provider);
-                          },
+                          onTap: (provider.db.settings?.isElectionFinished ?? false)
+                              ? null
+                              : () {
+                                  _showVoterDetailsDialog(context, voter, provider);
+                                },
                         );
                       },
                     ),
