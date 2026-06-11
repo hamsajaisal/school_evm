@@ -235,9 +235,12 @@ class ElectionProvider extends ChangeNotifier {
   Future<void> startAsControllerHost(int port) async {
     final schoolName = db.settings?.schoolName ?? 'EVM Host';
     final year = db.settings?.year ?? '2026';
+    final targetClass = db.settings?.targetClass ?? '';
+    final displayName = targetClass.isNotEmpty ? "$schoolName ($targetClass)" : schoolName;
+
     await net.startHosting(
       port,
-      schoolName,
+      displayName,
       year,
       (candidateId) async {
         await db.castVote(candidateId);

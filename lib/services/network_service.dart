@@ -100,53 +100,72 @@ class NetworkService extends ChangeNotifier {
     _role = NetworkRole.client;
     this.onSyncResultsReceived = onSyncResultsReceived;
 
-    final uri = Uri.parse('ws://$ipAddress:$port');
-    try {
-      final WebSocketChannel channel;
-      if (kIsWeb) {
-        channel = WebSocketChannel.connect(uri);
-      } else {
-        channel = IOWebSocketChannel.connect(uri, pingInterval: const Duration(seconds: 5));
+    final ips = ipAddress.split(',');
+    Object? lastError;
+
+    for (var ip in ips) {
+      final cleanIp = ip.trim();
+      if (cleanIp.isEmpty) continue;
+
+      final uri = Uri.parse('ws://$cleanIp:$port');
+      try {
+        final WebSocketChannel channel;
+        if (kIsWeb) {
+          channel = WebSocketChannel.connect(uri);
+        } else {
+          channel = IOWebSocketChannel.connect(uri, pingInterval: const Duration(seconds: 5));
+        }
+        
+        // Wait for connection to succeed (2.5 seconds timeout per IP is enough for local network)
+        await channel.ready.timeout(const Duration(milliseconds: 2500));
+        
+        _channel = channel;
+        _isConnected = true;
+        _boothState = BoothState.locked;
+        notifyListeners();
+
+        // Announce connection on client
+        SemanticsService.announce("Connected to controller successfully", TextDirection.ltr);
+
+        // Send CLIENT_CONNECTED handshake to server
+        final handshake = {'action': 'CLIENT_CONNECTED'};
+        _channel!.sink.add(jsonEncode(handshake));
+
+        _channel!.stream.listen(
+          (message) {
+            if (message is String) {
+              _handleIncomingMessage(message);
+            }
+          },
+          onDone: () {
+            _isConnected = false;
+            _role = NetworkRole.none;
+            notifyListeners();
+            SemanticsService.announce("Disconnected from controller", TextDirection.ltr);
+          },
+          onError: (err) {
+            _isConnected = false;
+            _role = NetworkRole.none;
+            notifyListeners();
+            SemanticsService.announce("Disconnected from controller due to error", TextDirection.ltr);
+          },
+        );
+        
+        return; // Successfully connected, stop checking other IPs
+      } catch (e) {
+        lastError = e;
+        // Continue to the next IP address in the list
       }
-      // Wait for handshake connection to succeed (up to 5 seconds)
-      await channel.ready.timeout(const Duration(seconds: 5));
-      
-      _channel = channel;
-      _isConnected = true;
-      _boothState = BoothState.locked;
-      notifyListeners();
+    }
 
-      // Announce connection on client
-      SemanticsService.announce("Connected to controller successfully", TextDirection.ltr);
-
-      // Send CLIENT_CONNECTED handshake to server
-      final handshake = {'action': 'CLIENT_CONNECTED'};
-      _channel!.sink.add(jsonEncode(handshake));
-
-      _channel!.stream.listen(
-        (message) {
-          if (message is String) {
-            _handleIncomingMessage(message);
-          }
-        },
-        onDone: () {
-          _isConnected = false;
-          _role = NetworkRole.none;
-          notifyListeners();
-          SemanticsService.announce("Disconnected from controller", TextDirection.ltr);
-        },
-        onError: (err) {
-          _isConnected = false;
-          _role = NetworkRole.none;
-          notifyListeners();
-          SemanticsService.announce("Disconnected from controller due to error", TextDirection.ltr);
-        },
-      );
-    } catch (e) {
-      _isConnected = false;
-      _role = NetworkRole.none;
-      notifyListeners();
-      rethrow;
+    // If we reach here, all IP connection attempts failed
+    _isConnected = false;
+    _role = NetworkRole.none;
+    notifyListeners();
+    if (lastError != null) {
+      throw lastError;
+    } else {
+      throw Exception("Failed to connect to any host IP.");
     }
   }
 

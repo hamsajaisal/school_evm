@@ -69,37 +69,48 @@ class BoothServerImpl implements BoothServer {
   Future<String?> getLocalIp() async {
     try {
       final interfaces = await NetworkInterface.list();
+      final List<String> ips = [];
       
-      // 1. Try to find a Wi-Fi or Ethernet interface first
+      // 1. Collect Wi-Fi, Ethernet, and Hotspot/AP interfaces
       for (var interface in interfaces) {
         final name = interface.name.toLowerCase();
-        if (name.contains('wlan') || name.contains('wifi') || name.contains('eth') || name.contains('en')) {
+        if (name.contains('wlan') || name.contains('wifi') || name.contains('eth') || name.contains('en') || name.contains('ap') || name.contains('softap')) {
           for (var addr in interface.addresses) {
             if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-              return addr.address;
+              if (!ips.contains(addr.address)) {
+                ips.add(addr.address);
+              }
             }
           }
         }
       }
       
-      // 2. Fallback to any non-loopback, non-cellular/p2p IPv4 interface
+      // 2. Collect other interfaces (excluding loopback, cellular, or p2p if possible in fallback)
       for (var interface in interfaces) {
         final name = interface.name.toLowerCase();
         if (name.contains('lo') || name.contains('rmnet') || name.contains('p2p')) continue;
         for (var addr in interface.addresses) {
           if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
+            if (!ips.contains(addr.address)) {
+              ips.add(addr.address);
+            }
           }
         }
       }
 
-      // 3. Last resort fallback: any IPv4
+      // 3. Collect everything else
       for (var interface in interfaces) {
         for (var addr in interface.addresses) {
           if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
+            if (!ips.contains(addr.address)) {
+              ips.add(addr.address);
+            }
           }
         }
+      }
+      
+      if (ips.isNotEmpty) {
+        return ips.join(',');
       }
     } catch (e) {
       print('Error getting local IP: $e');
