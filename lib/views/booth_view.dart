@@ -105,6 +105,27 @@ class _BoothViewState extends State<BoothView> {
     final voter = provider.activeVoter;
     final candidates = provider.db.candidates;
 
+    if (candidates.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        provider.requestElectionConfig();
+      });
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text(
+                'Syncing election configuration...',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -130,35 +151,39 @@ class _BoothViewState extends State<BoothView> {
           ),
         ),
       ),
-      body: Container(
-        color: isDark ? const Color(0xFF11111E) : const Color(0xFFF9FAFC),
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 16.0),
-              child: Text(
-                'Tap your candidate\'s name or symbol to vote.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-            ),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 20,
-                  childAspectRatio: 2.2, // Rectangular EVM keys
+      body: Semantics(
+        label: 'Voting booth unlocked. Tap your candidate\'s name or symbol to vote.',
+        focused: true,
+        child: Container(
+          color: isDark ? const Color(0xFF11111E) : const Color(0xFFF9FAFC),
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16.0),
+                child: Text(
+                  'Tap your candidate\'s name or symbol to vote.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                itemCount: candidates.length,
-                itemBuilder: (ctx, idx) {
-                  final cand = candidates[idx];
-                  return _buildCandidateTile(context, provider, cand, isDark);
-                },
               ),
-            ),
-          ],
+              Expanded(
+                child: GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 20,
+                    mainAxisSpacing: 20,
+                    childAspectRatio: 2.2, // Rectangular EVM keys
+                  ),
+                  itemCount: candidates.length,
+                  itemBuilder: (ctx, idx) {
+                    final cand = candidates[idx];
+                    return _buildCandidateTile(context, provider, cand, isDark);
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

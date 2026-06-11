@@ -129,10 +129,7 @@ class NetworkService extends ChangeNotifier {
         // Announce connection on client
         SemanticsService.announce("Connected to controller successfully", TextDirection.ltr);
 
-        // Send CLIENT_CONNECTED handshake to server
-        final handshake = {'action': 'CLIENT_CONNECTED'};
-        _channel!.sink.add(jsonEncode(handshake));
-
+        // 1. Listen to stream first
         _channel!.stream.listen(
           (message) {
             if (message is String) {
@@ -152,6 +149,10 @@ class NetworkService extends ChangeNotifier {
             SemanticsService.announce("Disconnected from controller due to error", TextDirection.ltr);
           },
         );
+
+        // 2. Then send CLIENT_CONNECTED handshake to server
+        final handshake = {'action': 'CLIENT_CONNECTED'};
+        _channel!.sink.add(jsonEncode(handshake));
         
         return; // Successfully connected, stop checking other IPs
       } catch (e) {
@@ -255,6 +256,14 @@ class NetworkService extends ChangeNotifier {
     }
   }
 
+  // Client -> Host: Request settings and candidates
+  void requestElectionConfig() {
+    if (_role == NetworkRole.client && _isConnected) {
+      final packet = {'action': 'REQUEST_CONFIG'};
+      _channel!.sink.add(jsonEncode(packet));
+    }
+  }
+
   // Process incoming JSON packets
   void _handleIncomingMessage(String message) {
     try {
@@ -268,6 +277,13 @@ class NetworkService extends ChangeNotifier {
             _isConnected = true;
             notifyListeners();
             SemanticsService.announce("Voting booth connected successfully", TextDirection.ltr);
+            onClientConnected?.call();
+          }
+          break;
+
+        case 'REQUEST_CONFIG':
+          if (_role == NetworkRole.host) {
+            print('HOST: Client requested config.');
             onClientConnected?.call();
           }
           break;

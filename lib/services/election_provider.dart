@@ -280,6 +280,11 @@ class ElectionProvider extends ChangeNotifier {
     });
   }
 
+  // Booth -> Request election settings and candidates config from host
+  void requestElectionConfig() {
+    net.requestElectionConfig();
+  }
+
   // Controller -> Authorize Voter
   void authorizeVoterForBooth(Voter voter) {
     _currentlyAuthorizedVoter = voter;
